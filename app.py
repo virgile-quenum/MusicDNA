@@ -113,7 +113,7 @@ with st.sidebar:
         zip2 = st.file_uploader("Standard export zip", type="zip",
                                  key="zip2", label_visibility="collapsed")
         if zip1:
-            if st.button("🚀 Analyse", use_container_width=True, type="primary"):
+            if st.button("Analyse", use_container_width=True, type="primary"):
                 with st.spinner("Loading your history..."):
                     records, lib, playlists, mode = read_zip(zip1)
                     if zip2:
@@ -139,26 +139,26 @@ with st.sidebar:
         has_lib = bool(lib.get('tracks'))
         has_pl  = bool(st.session_state.playlists)
         if mode == 'extended':
-            st.success(f"✅ Extended ({int(dfm['year'].min())}–{int(dfm['year'].max())})")
+            st.success(f"Extended ({int(dfm['year'].min())}-{int(dfm['year'].max())})")
         else:
-            st.warning("⚠️ Standard export (12 months only)")
-        if has_lib: st.success("✅ Likes data loaded")
-        else:       st.warning("⚠️ No likes — upload standard zip")
-        if has_pl:  st.success("✅ Playlist data loaded")
-        else:       st.warning("⚠️ No playlists — upload standard zip")
+            st.warning("Standard export (12 months only)")
+        if has_lib: st.success("Likes data loaded")
+        else:       st.warning("No likes - upload standard zip")
+        if has_pl:  st.success("Playlist data loaded")
+        else:       st.warning("No playlists - upload standard zip")
         st.markdown("---")
         page = st.radio("", [
-            "🏠 Overview","🎤 Artists & Tracks","🕐 Time Patterns",
-            "👶 Parent Mode","💔 Likes Autopsy","📋 Playlist Autopsy",
-            "😳 Hall of Shame","⭐ Celebrity Twin","🔮 Musical Horoscope",
+            "Overview","Artists and Tracks","Time Patterns",
+            "Parent Mode","Likes Autopsy","Playlist Autopsy",
+            "Hall of Shame","Celebrity Twin","Musical Horoscope",
         ], label_visibility="collapsed")
         st.markdown("---")
-        kids_on = st.toggle("👶 Include daughters content", value=False)
-        st.caption(f"Your music: **{len(dfm):,}** plays · **{dfm['ms'].sum()/3600000:.0f}h**")
+        kids_on = st.toggle("Include daughters content", value=False)
+        st.caption(f"Your music: {len(dfm):,} plays - {dfm['ms'].sum()/3600000:.0f}h")
         if not dfd.empty:
-            st.caption(f"Kids: **{dfd['ms'].sum()/3600000:.0f}h**")
+            st.caption(f"Kids: {dfd['ms'].sum()/3600000:.0f}h")
         st.markdown("---")
-        if st.button("🔄 Load new file", use_container_width=True):
+        if st.button("Load new file", use_container_width=True):
             for k in ['data_loaded','dfm','dfd','lib','playlists','mode']:
                 st.session_state[k] = False if k=='data_loaded' else ({} if k=='lib' else ([] if k=='playlists' else None))
             st.rerun()
@@ -175,20 +175,20 @@ if not st.session_state.data_loaded:
       </p>
       <div style='background:#0f0f0f;border:1px solid #1e1e1e;border-radius:12px;padding:24px;text-align:left;margin-bottom:16px;'>
         <div style='color:{VIOLET_LIGHT};font-weight:700;font-size:.82em;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;'>
-          📦 Step 1 — Extended History (required)</div>
+          Step 1 - Extended History (required)</div>
         <div style='color:#888;font-size:.85em;line-height:2.2;'>
-          1. Go to <b style='color:#fff;'>spotify.com/account/privacy</b><br>
-          2. Scroll to "Download your data"<br>
-          3. Select <b style='color:#fff;'>Extended streaming history</b> → Request<br>
-          4. Wait up to 30 days → download zip → upload ←
+          1. Go to spotify.com/account/privacy<br>
+          2. Scroll to Download your data<br>
+          3. Select Extended streaming history then Request<br>
+          4. Wait up to 30 days, download zip, upload here
         </div>
       </div>
       <div style='background:#0a0a0a;border:1px solid #f59e0b33;border-radius:12px;padding:20px;text-align:left;'>
         <div style='color:#f59e0b;font-weight:700;font-size:.82em;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;'>
-          ⚡ Step 2 — Standard Export (optional)</div>
+          Step 2 - Standard Export (optional)</div>
         <div style='color:#666;font-size:.83em;line-height:2;'>
-          Same page → select <b style='color:#aaa;'>Account data</b> (arrives in minutes).<br>
-          Unlocks: <b style='color:#aaa;'>Likes Autopsy · Playlist Autopsy · Hall of Shame</b>
+          Same page, select Account data (arrives in minutes).<br>
+          Unlocks: Likes Autopsy, Playlist Autopsy, Hall of Shame
         </div>
       </div>
     </div>""", unsafe_allow_html=True)
@@ -201,12 +201,12 @@ playlists = st.session_state.playlists
 kids_on   = False
 df        = pd.concat([dfm, dfd]) if (kids_on and not dfd.empty) else dfm
 
-if   page == "🏠 Overview":          import overview;         overview.render(dfm, dfd, kids_on)
-elif page == "🎤 Artists & Tracks":  import artists;          artists.render(df)
-elif page == "🕐 Time Patterns":     import time_patterns;    time_patterns.render(df)
-elif page == "👶 Parent Mode":       import parent_mode;      parent_mode.render(dfm, dfd, [])
-elif page == "💔 Likes Autopsy":     import likes_autopsy;    likes_autopsy.render(dfm, lib)
-elif page == "📋 Playlist Autopsy":  import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
-elif page == "😳 Hall of Shame":     import hall_of_shame;    hall_of_shame.render(dfm, lib)
-elif page == "⭐ Celebrity Twin":    import celebrity_twin;   celebrity_twin.render(dfm)
-elif page == "🔮 Musical Horoscope": import horoscope;        horoscope.render(dfm, dfd)
+if   "Overview"        in page: import overview;         overview.render(dfm, dfd, kids_on)
+elif "Artists"         in page: import artists;          artists.render(df)
+elif "Time Patterns"   in page: import time_patterns;    time_patterns.render(df)
+elif "Parent Mode"     in page: import parent_mode;      parent_mode.render(dfm, dfd, [])
+elif "Likes Autopsy"   in page: import likes_autopsy;    likes_autopsy.render(dfm, lib)
+elif "Playlist"        in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
+elif "Hall of Shame"   in page: import hall_of_shame;    hall_of_shame.render(dfm, lib)
+elif "Celebrity"       in page: import celebrity_twin;   celebrity_twin.render(dfm)
+elif "Horoscope"       in page: import horoscope;        horoscope.render(dfm, dfd)
