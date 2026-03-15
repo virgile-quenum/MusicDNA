@@ -1,121 +1,167 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 
 VIOLET = "#7C3AED"
 VIOLET_LIGHT = "#A78BFA"
 
-def render(dfm, playlists):
-    st.title("📋 Playlist Autopsy")
-    st.markdown("*Which playlists you actually use vs. which are archives.*")
+def render(dfm, lib):
+    st.title("💔 Likes Autopsy")
+    st.markdown("*What you **think** you love vs. what you **actually** play.*")
 
-    if not playlists:
-        st.warning("No playlist data — upload your standard export zip alongside the Extended History.")
+    liked = lib.get('tracks', [])
+    if not liked:
+        st.warning("No likes data — upload your standard export zip alongside the Extended History.")
         return
 
-    played_tracks = set(dfm['trackName'].str.lower().str.strip())
+    liked_df = pd.DataFrame(liked)
+    played_tracks  = set(dfm['trackName'].str.lower().str.strip())
+    played_artists = dfm.groupby('artistName').agg(
+        plays=('ms','count'),
+        hours=('ms', lambda x: round(x.sum()/3600000,2))
+    ).reset_index()
 
-    pl_stats = []
-    for pl in playlists:
-        items = pl.get('items', [])
-        if len(items) < 5:
-            continue
-        pl_tracks = set()
-        pl_artists = set()
-        for item in items:
-            t = item.get('track', {})
-            if t.get('trackName'):
-                pl_tracks.add(t['trackName'].lower().strip())
-            if t.get('artistName'):
-                pl_artists.add(t['artistName'])
-        if not pl_tracks:
-            continue
-        played_in  = pl_tracks & played_tracks
-        activation = round(len(played_in) / len(pl_tracks) * 100, 1)
-        diversity  = round(len(pl_artists) / len(items) * 100, 1) if items else 0
-        pl_stats.append({
-            'name':           pl['name'],
-            'total':          len(items),
-            'activation':     activation,
-            'unique_artists': len(pl_artists),
-            'diversity':      diversity,
-        })
+    PLAY_THRESHOLD = 15
 
-    if not pl_stats:
-        st.warning("No playlists with enough tracks found.")
-        return
+    liked_by_artist = liked_df.groupby('artist').size().reset_index(name='liked_count')
+    merged = liked_by_artist.merge(
+        played_artists.rename(columns={'artistName':'artist'}),
+        on='artist', how='outer'
+    ).fillna(0)
+    merged['liked_count'] = merged['liked_count'].astype(int)
+    merged['plays']       = merged['plays'].astype(int)
+    merged['hours']       = merged['hours'].round(2)
 
-    pl_df = pd.DataFrame(pl_stats).sort_values('activation', ascending=False)
+    def classify(row):
+        if row['liked_count'] >= 3 and row['plays'] >= 20:
+            return 'Active'
+        if row['liked_count'] >= 3 and row['plays'] < 5:
+            return 'Admired'
+        if row['liked_count'] < 2 and row['plays'] >= PLAY_THRESHOLD:
+            return 'Visceral'
+        return 'Neutral'
 
-    alive = len(pl_df[pl_df['activation'] > 20])
-    dead  = len(pl_df[pl_df['activation'] < 5])
+    merged['profile'] = merged.apply(classify, axis=1)
 
-    c1, c2, c3 = st.columns(3)
-    for col, val, lbl in [
-        (c1, f"{len(pl_df)}", "Playlists analysed"),
-        (c2, f"{alive}",      "Active (>20% played)"),
-        (c3, f"{dead}",       "Archives (<5% played)"),
+    never_played = sum(1 for t in liked
+                      if t['track'].lower().strip() not in played_tracks)
+
+    c1,c2,c3,c4 = st.columns(4)
+    for col,val,lbl in [
+        (c1, f"{len(liked):,}",        "Tracks liked"),
+        (c2, f"{never_played:,}",       f"Never played ({never_played/len(liked)*100:.0f}%)"),
+        (c3, f"{len(merged[merged['profile']=='Admired'])}",  "Admired but not consumed"),
+        (c4, f"{len(merged[merged['profile']=='Visceral'])}", "Played but never liked"),
     ]:
         with col:
             st.markdown(f"<div class='metric-card'><div class='metric-val'>{val}</div>"
                         f"<div class='metric-lbl'>{lbl}</div></div>",
                         unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["Activation Map", "Most Active", "Archives"])
+    tab1, tab2, tab3 = st.tabs(["The Identity Gap", "Most Liked Artists", "Ghost Artists"])
 
     with tab1:
-        fig = px.scatter(
-            pl_df, x='diversity', y='activation', size='total',
-            text='name', color='activation',
-            color_continuous_scale=['#e74c3c', '#f39c12', VIOLET],
-            labels={'diversity': 'Artist Diversity %',
-                    'activation': 'Activation %', 'total': 'Tracks'},
-            hover_data=['total', 'unique_artists']
+        st.markdown("### The Gap — Who You Think You Are vs. Who You Are")
+        st.caption(
+            "Left: artists you liked heavily but barely play. "
+            "Right: artists you play constantly but never saved. "
+            "Artists with 15+ plays are considered intentional — "
+            "being in your playlists counts as curated, not a guilty pleasure."
         )
-        fig.update_traces(textposition='top center', textfont_size=9)
-        fig.update_layout(
-            plot_bgcolor='#111', paper_bgcolor='#111', font_color='#888',
-            xaxis=dict(gridcolor='#1a1a1a'),
-            yaxis=dict(gridcolor='#1a1a1a'),
-            height=600, margin=dict(l=0, r=0, t=20, b=0)
-        )
-        fig.add_hline(y=20, line_dash='dot', line_color='#f59e0b',
-                      annotation_text='20% threshold')
-        fig.add_vline(x=50, line_dash='dot', line_color='#555')
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("Top-right = diverse & active. Bottom-left = focused archive. Size = number of tracks.")
+        col1, col2 = st.columns(2)
+
+        admired = merged[
+            (merged['liked_count'] >= 5) & (merged['plays'] < 10)
+        ].sort_values('liked_count', ascending=False).head(12)
+
+        visceral = merged[
+            (merged['liked_count'] <= 1) & (merged['plays'] >= PLAY_THRESHOLD)
+        ].sort_values('plays', ascending=False).head(12)
+
+        with col1:
+            st.markdown("**You admire but do not really play**")
+            st.caption("Liked a lot — listened rarely. Cultural identity, not daily taste.")
+            if admired.empty:
+                st.info("None detected.")
+            else:
+                fig = go.Figure(go.Bar(
+                    x=admired['liked_count'],
+                    y=admired['artist'],
+                    orientation='h',
+                    marker_color='#9B59B6',
+                    text=[f"{c} liked, {p} plays" for c,p in
+                          zip(admired['liked_count'], admired['plays'])],
+                    textposition='outside',
+                ))
+                fig.update_layout(
+                    plot_bgcolor='#111', paper_bgcolor='#111', font_color='#aaa',
+                    yaxis=dict(autorange='reversed', tickfont=dict(size=11,color='#ccc')),
+                    xaxis=dict(gridcolor='#1a1a1a', title='Tracks liked'),
+                    margin=dict(l=150,r=80,t=10,b=20),
+                    height=max(300, len(admired)*30)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("**You play but never formally liked**")
+            st.caption("Listened constantly — never saved. Visceral, unfiltered, real.")
+            if visceral.empty:
+                st.info("None detected.")
+            else:
+                fig2 = go.Figure(go.Bar(
+                    x=visceral['plays'],
+                    y=visceral['artist'],
+                    orientation='h',
+                    marker_color=VIOLET,
+                    text=[f"{p} plays, {c} liked" for p,c in
+                          zip(visceral['plays'], visceral['liked_count'])],
+                    textposition='outside',
+                ))
+                fig2.update_layout(
+                    plot_bgcolor='#111', paper_bgcolor='#111', font_color='#aaa',
+                    yaxis=dict(autorange='reversed', tickfont=dict(size=11,color='#ccc')),
+                    xaxis=dict(gridcolor='#1a1a1a', title='Plays'),
+                    margin=dict(l=150,r=80,t=10,b=20),
+                    height=max(300, len(visceral)*30)
+                )
+                st.plotly_chart(fig2, use_container_width=True)
+
+        st.markdown("""<div class='insight'>
+        The gap reveals two parallel listening modes.
+        Your likes reflect cultural identity — artists you respect and want associated with your taste.
+        Your plays reveal what you actually need musically, day to day, unfiltered.
+        The overlap is smaller than most people think.
+        </div>""", unsafe_allow_html=True)
 
     with tab2:
-        top15 = pl_df.sort_values('activation', ascending=False).head(15)
-        fig2 = go.Figure(go.Bar(
-            x=top15['activation'],
-            y=top15['name'],
-            orientation='h',
-            marker_color=VIOLET,
-            text=[f"{a}%" for a in top15['activation']],
+        st.markdown("### Most Liked Artists")
+        top = liked_by_artist.sort_values('liked_count', ascending=False).head(20)
+        fig3 = go.Figure(go.Bar(
+            x=top['liked_count'], y=top['artist'], orientation='h',
+            marker_color=VIOLET_LIGHT,
+            text=[f"{c}" for c in top['liked_count']],
             textposition='outside',
         ))
-        fig2.update_layout(
+        fig3.update_layout(
             plot_bgcolor='#111', paper_bgcolor='#111', font_color='#aaa',
-            yaxis=dict(autorange='reversed', gridcolor='#1a1a1a',
-                       tickfont=dict(size=12, color='#ccc')),
-            xaxis=dict(gridcolor='#1a1a1a', title='Activation %', range=[0, 115]),
-            margin=dict(l=220, r=60, t=10, b=20),
-            height=480
+            yaxis=dict(autorange='reversed', tickfont=dict(size=12, color='#ccc')),
+            xaxis=dict(gridcolor='#1a1a1a', title='Tracks liked'),
+            margin=dict(l=160,r=60,t=10,b=20), height=560
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig3, use_container_width=True)
 
     with tab3:
-        dead_pl = pl_df[pl_df['activation'] < 5].sort_values('total', ascending=False)
-        st.markdown(f"### {len(dead_pl)} playlists built — never revisited")
-        if dead_pl.empty:
-            st.success("None! You actually use all your playlists. Rare.")
+        ghost = merged[
+            (merged['liked_count'] > 0) & (merged['plays'] == 0)
+        ].sort_values('liked_count', ascending=False)
+        st.markdown(f"### {len(ghost)} Artists — Liked, Never Played")
+        st.caption("You saved their music at some point. You never came back.")
+        if ghost.empty:
+            st.success("None — you actually listen to what you like.")
         else:
             st.dataframe(
-                dead_pl[['name', 'total', 'activation', 'unique_artists']].rename(columns={
-                    'name': 'Playlist', 'total': 'Tracks',
-                    'activation': 'Played %', 'unique_artists': 'Artists'
-                }).reset_index(drop=True),
-                use_container_width=True
+                ghost[['artist','liked_count']].rename(
+                    columns={'artist':'Artist','liked_count':'Tracks Liked'}
+                ).reset_index(drop=True),
+                use_container_width=True, height=500
             )
