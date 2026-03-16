@@ -1,8 +1,3 @@
-"""
-MusicDNA — Powered by DhalsimStream
-OAuth Spotify + Extended History zip support
-"""
-
 import streamlit as st
 import json, zipfile, io, sys, os
 import pandas as pd
@@ -15,55 +10,65 @@ st.set_page_config(page_title="MusicDNA", page_icon="🎵",
                    layout="wide", initial_sidebar_state="expanded")
 
 VIOLET = "#7C3AED"
-VIOLET_LIGHT = "#A78BFA"
+VL = "#A78BFA"
 
-st.markdown(f"""<style>
+CSS = """
+<style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-* {{ font-family: 'Inter', sans-serif; }}
-[data-testid="stSidebar"] {{ background: #0a0a0a; border-right: 1px solid #1a1a1a; }}
-[data-testid="stSidebar"] * {{ color: #ccc; }}
-.metric-card {{ background:#0f0f0f;border:1px solid #1e1e1e;border-radius:12px;
-                padding:18px;text-align:center;margin:4px 0; }}
-.metric-val {{ font-size:1.9em;font-weight:900;color:{VIOLET_LIGHT}; }}
-.metric-lbl {{ font-size:.72em;color:#555;margin-top:5px; }}
-.insight {{ background:#0f0f0f;border-left:3px solid {VIOLET};border-radius:6px;
-            padding:11px 15px;margin:7px 0;font-size:.87em;color:#ccc;line-height:1.6; }}
-.shame {{ background:#0f0505;border-left:3px solid #dc2626;border-radius:6px;
-          padding:11px 15px;margin:7px 0;font-size:.87em;color:#ccc;line-height:1.6; }}
-h1 {{ color:#fff !important; }}
-h2 {{ color:{VIOLET_LIGHT} !important;font-size:1em !important;
-      text-transform:uppercase;letter-spacing:.09em; }}
-.stTabs [data-baseweb="tab"] {{ color:#666; }}
-.stTabs [aria-selected="true"] {{ color:{VIOLET_LIGHT} !important; }}
-</style>""", unsafe_allow_html=True)
+* { font-family: 'Inter', sans-serif; }
+[data-testid="stSidebar"] { background: #0a0a0a; border-right: 1px solid #1a1a1a; }
+[data-testid="stSidebar"] * { color: #ccc; }
+.metric-card { background:#0f0f0f; border:1px solid #1e1e1e; border-radius:12px; padding:18px; text-align:center; margin:4px 0; }
+.metric-val { font-size:1.9em; font-weight:900; color:#A78BFA; }
+.metric-lbl { font-size:.72em; color:#555; margin-top:5px; }
+.insight { background:#0f0f0f; border-left:3px solid #7C3AED; border-radius:6px; padding:11px 15px; margin:7px 0; font-size:.87em; color:#ccc; line-height:1.6; }
+.shame { background:#0f0505; border-left:3px solid #dc2626; border-radius:6px; padding:11px 15px; margin:7px 0; font-size:.87em; color:#ccc; line-height:1.6; }
+h1 { color:#fff !important; }
+h2 { color:#A78BFA !important; font-size:1em !important; text-transform:uppercase; letter-spacing:.09em; }
+.stTabs [data-baseweb="tab"] { color:#666; }
+.stTabs [aria-selected="true"] { color:#A78BFA !important; }
+</style>
+"""
+st.markdown(CSS, unsafe_allow_html=True)
 
 handle_callback()
 
-for k,v in [('data_loaded',False),('dfm',None),('dfd',None),
-             ('lib',{}),('playlists',[]),('mode',None)]:
-    if k not in st.session_state: st.session_state[k] = v
+for k, v in [('data_loaded', False), ('dfm', None), ('dfd', None),
+              ('lib', {}), ('playlists', []), ('mode', None)]:
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 def parse_ext(r):
     if not (r.get('master_metadata_track_name')
-            and str(r.get('spotify_track_uri','')).startswith('spotify:track:')
-            and r.get('ms_played',0) >= 10000): return None
-    return {'ts': r['ts'],
-            'artistName': r.get('master_metadata_album_artist_name') or '',
-            'trackName':  r.get('master_metadata_track_name') or '',
-            'albumName':  r.get('master_metadata_album_album_name') or '',
-            'ms': r['ms_played'], 'skipped': bool(r.get('skipped',False)),
-            'reason_end': r.get('reason_end',''), 'shuffle': bool(r.get('shuffle',False)),
-            'track_uri': r.get('spotify_track_uri',''), 'platform': r.get('platform','')}
+            and str(r.get('spotify_track_uri', '')).startswith('spotify:track:')
+            and r.get('ms_played', 0) >= 10000):
+        return None
+    return {
+        'ts':         r['ts'],
+        'artistName': r.get('master_metadata_album_artist_name') or '',
+        'trackName':  r.get('master_metadata_track_name') or '',
+        'albumName':  r.get('master_metadata_album_album_name') or '',
+        'ms':         r['ms_played'],
+        'skipped':    bool(r.get('skipped', False)),
+        'reason_end': r.get('reason_end', ''),
+        'shuffle':    bool(r.get('shuffle', False)),
+        'track_uri':  r.get('spotify_track_uri', ''),
+        'platform':   r.get('platform', ''),
+    }
 
 def parse_std(r):
-    if not (r.get('trackName') and r.get('ms_played',0) >= 10000): return None
-    return {'ts': r.get('endTime',''), 'artistName': r.get('artistName',''),
-            'trackName': r.get('trackName',''), 'albumName': '',
-            'ms': r['ms_played'], 'skipped': r['ms_played']<30000,
-            'reason_end': '', 'shuffle': False, 'track_uri': '', 'platform': ''}
+    if not (r.get('trackName') and r.get('ms_played', 0) >= 10000):
+        return None
+    return {
+        'ts': r.get('endTime', ''), 'artistName': r.get('artistName', ''),
+        'trackName': r.get('trackName', ''), 'albumName': '',
+        'ms': r['ms_played'], 'skipped': r['ms_played'] < 30000,
+        'reason_end': '', 'shuffle': False, 'track_uri': '', 'platform': '',
+    }
 
 def make_df(records):
-    if not records: return pd.DataFrame()
+    if not records:
+        return pd.DataFrame()
     df = pd.DataFrame(records)
     df['ts']    = pd.to_datetime(df['ts'], utc=True, errors='coerce').dt.tz_localize(None)
     df['year']  = df['ts'].dt.year
@@ -93,11 +98,144 @@ def read_zip(uploaded):
                 for r in json.loads(z.read(fn)):
                     rec = parse_std(r)
                     if rec: records.append(rec)
-        if lf: lib = json.loads(z.read(lf))
+        if lf:
+            lib = json.loads(z.read(lf))
         for pf in pfs:
-            try: playlists.extend(json.loads(z.read(pf)).get('playlists',[]))
-            except: pass
+            try:
+                playlists.extend(json.loads(z.read(pf)).get('playlists', []))
+            except:
+                pass
     return records, lib, playlists, mode
 
 with st.sidebar:
     st.markdown(
+        "<div style='padding:16px 0 8px;text-align:center;'>"
+        "<div style='font-size:1.5em;font-weight:900;color:#fff;'>🎵 MusicDNA</div>"
+        "<div style='font-size:.68em;color:#555;margin-top:2px;'>powered by DhalsimStream</div>"
+        "</div>",
+        unsafe_allow_html=True
+    )
+    st.markdown("---")
+
+    if is_authenticated():
+        st.success("Spotify connected")
+        if st.button("Disconnect", use_container_width=True):
+            del st.session_state['spotify_token']
+            st.rerun()
+    else:
+        auth_url = get_auth_url()
+        btn_html = (
+            "<a href='" + auth_url + "' target='_self' "
+            "style='display:block;background:#1DB954;color:#000;font-weight:800;"
+            "text-align:center;padding:10px;border-radius:8px;"
+            "text-decoration:none;font-size:.9em;margin-bottom:8px;'>"
+            "Connect Spotify</a>"
+        )
+        st.markdown(btn_html, unsafe_allow_html=True)
+        st.caption("Enables: Discovery, recommendations, mobile access")
+
+    st.markdown("---")
+
+    if not st.session_state.data_loaded:
+        st.markdown("### Extended History")
+        st.caption("Full 12-year analysis.")
+        zip1 = st.file_uploader("Extended history zip", type="zip",
+                                 key="zip1", label_visibility="collapsed")
+        st.markdown("### Standard Export")
+        st.caption("Unlocks Likes Autopsy and Playlist Autopsy.")
+        zip2 = st.file_uploader("Standard export zip", type="zip",
+                                 key="zip2", label_visibility="collapsed")
+        if zip1:
+            if st.button("Analyse", use_container_width=True, type="primary"):
+                with st.spinner("Loading..."):
+                    records, lib, playlists, mode = read_zip(zip1)
+                    if zip2:
+                        _, lib2, pl2, _ = read_zip(zip2)
+                        if lib2: lib = lib2
+                        if pl2:  playlists = pl2
+                    if records:
+                        my_r, dau_r = split(records)
+                        st.session_state.dfm       = make_df(my_r)
+                        st.session_state.dfd       = make_df(dau_r)
+                        st.session_state.lib       = lib
+                        st.session_state.playlists = playlists
+                        st.session_state.mode      = mode
+                        st.session_state.data_loaded = True
+                        st.rerun()
+                    else:
+                        st.error("No music data found.")
+    else:
+        dfm  = st.session_state.dfm
+        dfd  = st.session_state.dfd
+        mode = st.session_state.mode
+        lib  = st.session_state.lib
+        if mode == 'extended':
+            st.success("Extended (" + str(int(dfm['year'].min())) + "-" + str(int(dfm['year'].max())) + ")")
+        else:
+            st.warning("Standard export (12 months only)")
+        if lib.get('tracks'):          st.success("Likes data loaded")
+        else:                          st.warning("No likes - upload standard zip")
+        if st.session_state.playlists: st.success("Playlist data loaded")
+        else:                          st.warning("No playlists - upload standard zip")
+        st.markdown("---")
+        if st.button("Load new file", use_container_width=True):
+            for k in ['data_loaded', 'dfm', 'dfd', 'lib', 'playlists', 'mode']:
+                st.session_state[k] = False if k == 'data_loaded' else ({} if k == 'lib' else ([] if k == 'playlists' else None))
+            st.rerun()
+
+    if st.session_state.data_loaded:
+        st.markdown("---")
+        page = st.radio("", [
+            "Overview", "Artists and Tracks", "Time Patterns",
+            "Parent Mode", "Likes Autopsy", "Playlist Autopsy",
+            "Hall of Shame", "Celebrity Twin", "Musical Horoscope",
+            "Discovery",
+        ], label_visibility="collapsed")
+        kids_on = st.toggle("Include daughters content", value=False)
+        dfm_ = st.session_state.dfm
+        if dfm_ is not None:
+            st.caption("Your music: " + str(len(dfm_)) + " plays - " + str(round(dfm_['ms'].sum()/3600000)) + "h")
+
+if not st.session_state.data_loaded and not is_authenticated():
+    st.markdown(
+        "<div style='max-width:640px;margin:60px auto;text-align:center;'>"
+        "<div style='font-size:4em;'>🎵</div>"
+        "<h1 style='font-size:2.8em;font-weight:900;'>Music<span style='color:#A78BFA;'>DNA</span></h1>"
+        "<p style='color:#555;font-size:.9em;margin-top:4px;'>powered by DhalsimStream</p>"
+        "<p style='color:#777;font-size:1em;line-height:1.9;margin:28px 0;'>"
+        "Discover who you really are as a listener.<br>Not Wrapped. No fluff. Just your data.</p>"
+        "<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;'>"
+        "<div style='background:#0f0f0f;border:1px solid #1DB95444;border-radius:12px;padding:20px;text-align:left;'>"
+        "<div style='color:#1DB954;font-weight:700;font-size:.82em;margin-bottom:8px;'>INSTANT - Connect Spotify</div>"
+        "<div style='color:#666;font-size:.82em;line-height:1.8;'>Login with Spotify.<br>Works on mobile.<br>Get Discovery and recommendations instantly.</div>"
+        "</div>"
+        "<div style='background:#0f0f0f;border:1px solid #7C3AED44;border-radius:12px;padding:20px;text-align:left;'>"
+        "<div style='color:#A78BFA;font-weight:700;font-size:.82em;margin-bottom:8px;'>FULL DEPTH - Upload zip</div>"
+        "<div style='color:#666;font-size:.82em;line-height:1.8;'>12+ years of history.<br>Parent Mode. Hall of Shame.<br>Request at spotify.com/privacy</div>"
+        "</div></div></div>",
+        unsafe_allow_html=True
+    )
+    st.stop()
+
+if not st.session_state.data_loaded and is_authenticated():
+    import discovery
+    discovery.render(None)
+    st.stop()
+
+dfm       = st.session_state.dfm
+dfd       = st.session_state.dfd
+lib       = st.session_state.lib
+playlists = st.session_state.playlists
+kids_on   = False
+df        = pd.concat([dfm, dfd]) if (kids_on and not dfd.empty) else dfm
+
+if   "Overview"   in page: import overview;         overview.render(dfm, dfd, kids_on)
+elif "Artists"    in page: import artists;          artists.render(df)
+elif "Time"       in page: import time_patterns;    time_patterns.render(df)
+elif "Parent"     in page: import parent_mode;      parent_mode.render(dfm, dfd, [])
+elif "Likes"      in page: import likes_autopsy;    likes_autopsy.render(dfm, lib)
+elif "Playlist"   in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
+elif "Hall"       in page: import hall_of_shame;    hall_of_shame.render(dfm, lib)
+elif "Celebrity"  in page: import celebrity_twin;   celebrity_twin.render(dfm)
+elif "Horoscope"  in page: import horoscope;        horoscope.render(dfm, dfd)
+elif "Discovery"  in page: import discovery;        discovery.render(dfm)
