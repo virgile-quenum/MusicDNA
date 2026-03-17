@@ -9,9 +9,6 @@ from spotify_auth import handle_callback, is_authenticated, get_auth_url
 st.set_page_config(page_title="MusicDNA", page_icon="🎵",
                    layout="wide", initial_sidebar_state="expanded")
 
-VIOLET = "#7C3AED"
-VL = "#A78BFA"
-
 CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
@@ -117,6 +114,23 @@ with st.sidebar:
     )
     st.markdown("---")
 
+    if not st.session_state.data_loaded:
+        st.markdown(
+            "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
+            "border-radius:8px;padding:14px;margin-bottom:12px;'>"
+            "<div style='color:#A78BFA;font-weight:700;font-size:.8em;"
+            "text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;'>"
+            "How to get started</div>"
+            "<div style='color:#666;font-size:.8em;line-height:2;'>"
+            "<b style='color:#ccc;'>Step 1</b> — Upload Extended History zip<br>"
+            "<b style='color:#ccc;'>Step 2</b> — Upload Standard Export zip<br>"
+            "<b style='color:#ccc;'>Step 3</b> — Click Analyse<br>"
+            "<b style='color:#ccc;'>Step 4</b> — Connect Spotify for Discovery"
+            "</div>"
+            "</div>",
+            unsafe_allow_html=True
+        )
+
     if is_authenticated():
         st.success("Spotify connected")
         if st.button("Disconnect", use_container_width=True):
@@ -124,30 +138,30 @@ with st.sidebar:
             st.rerun()
     else:
         auth_url = get_auth_url()
-        btn_html = (
+        st.markdown(
             "<a href='" + auth_url + "' target='_self' "
             "style='display:block;background:#1DB954;color:#000;font-weight:800;"
             "text-align:center;padding:10px;border-radius:8px;"
             "text-decoration:none;font-size:.9em;margin-bottom:8px;'>"
-            "Connect Spotify</a>"
+            "Step 4 — Connect Spotify</a>",
+            unsafe_allow_html=True
         )
-        st.markdown(btn_html, unsafe_allow_html=True)
-        st.caption("Enables: Discovery, recommendations, mobile access")
+        st.caption("Enables Discovery and recommendations")
 
     st.markdown("---")
 
     if not st.session_state.data_loaded:
-        st.markdown("### Extended History")
-        st.caption("Full 12-year analysis.")
+        st.markdown("**Step 1 — Extended History** *(required)*")
+        st.caption("Your full 12-year analysis. The big zip.")
         zip1 = st.file_uploader("Extended history zip", type="zip",
                                  key="zip1", label_visibility="collapsed")
-        st.markdown("### Standard Export")
-        st.caption("Unlocks Likes Autopsy and Playlist Autopsy.")
+        st.markdown("**Step 2 — Standard Export** *(recommended)*")
+        st.caption("Unlocks Likes Autopsy and Playlist Autopsy. The small zip.")
         zip2 = st.file_uploader("Standard export zip", type="zip",
                                  key="zip2", label_visibility="collapsed")
         if zip1:
-            if st.button("Analyse", use_container_width=True, type="primary"):
-                with st.spinner("Loading..."):
+            if st.button("Step 3 — Analyse", use_container_width=True, type="primary"):
+                with st.spinner("Loading your history..."):
                     records, lib, playlists, mode = read_zip(zip1)
                     if zip2:
                         _, lib2, pl2, _ = read_zip(zip2)
@@ -197,24 +211,8 @@ with st.sidebar:
             st.caption("Your music: " + str(len(dfm_)) + " plays - " + str(round(dfm_['ms'].sum()/3600000)) + "h")
 
 if not st.session_state.data_loaded and not is_authenticated():
-    st.markdown(
-        "<div style='max-width:640px;margin:60px auto;text-align:center;'>"
-        "<div style='font-size:4em;'>🎵</div>"
-        "<h1 style='font-size:2.8em;font-weight:900;'>Music<span style='color:#A78BFA;'>DNA</span></h1>"
-        "<p style='color:#555;font-size:.9em;margin-top:4px;'>powered by DhalsimStream</p>"
-        "<p style='color:#777;font-size:1em;line-height:1.9;margin:28px 0;'>"
-        "Discover who you really are as a listener.<br>Not Wrapped. No fluff. Just your data.</p>"
-        "<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;'>"
-        "<div style='background:#0f0f0f;border:1px solid #1DB95444;border-radius:12px;padding:20px;text-align:left;'>"
-        "<div style='color:#1DB954;font-weight:700;font-size:.82em;margin-bottom:8px;'>INSTANT - Connect Spotify</div>"
-        "<div style='color:#666;font-size:.82em;line-height:1.8;'>Login with Spotify.<br>Works on mobile.<br>Get Discovery and recommendations instantly.</div>"
-        "</div>"
-        "<div style='background:#0f0f0f;border:1px solid #7C3AED44;border-radius:12px;padding:20px;text-align:left;'>"
-        "<div style='color:#A78BFA;font-weight:700;font-size:.82em;margin-bottom:8px;'>FULL DEPTH - Upload zip</div>"
-        "<div style='color:#666;font-size:.82em;line-height:1.8;'>12+ years of history.<br>Parent Mode. Hall of Shame.<br>Request at spotify.com/privacy</div>"
-        "</div></div></div>",
-        unsafe_allow_html=True
-    )
+    import landing
+    landing.render(get_auth_url)
     st.stop()
 
 if not st.session_state.data_loaded and is_authenticated():
