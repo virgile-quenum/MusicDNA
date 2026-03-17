@@ -1,239 +1,161 @@
 import streamlit as st
-import json, zipfile, io, sys, os
-import pandas as pd
 
-sys.path.insert(0, os.path.dirname(__file__))
-from filters import split
-from spotify_auth import handle_callback, is_authenticated, get_auth_url
+def render(get_auth_url_fn):
+    auth_url = get_auth_url_fn()
 
-st.set_page_config(page_title="MusicDNA", page_icon="🎵",
-                   layout="wide", initial_sidebar_state="expanded")
-
-CSS = """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-* { font-family: 'Inter', sans-serif; }
-[data-testid="stSidebar"] { background: #0a0a0a; border-right: 1px solid #1a1a1a; }
-[data-testid="stSidebar"] * { color: #ccc; }
-.metric-card { background:#0f0f0f; border:1px solid #1e1e1e; border-radius:12px; padding:18px; text-align:center; margin:4px 0; }
-.metric-val { font-size:1.9em; font-weight:900; color:#A78BFA; }
-.metric-lbl { font-size:.72em; color:#555; margin-top:5px; }
-.insight { background:#0f0f0f; border-left:3px solid #7C3AED; border-radius:6px; padding:11px 15px; margin:7px 0; font-size:.87em; color:#ccc; line-height:1.6; }
-.shame { background:#0f0505; border-left:3px solid #dc2626; border-radius:6px; padding:11px 15px; margin:7px 0; font-size:.87em; color:#ccc; line-height:1.6; }
-h1 { color:#fff !important; }
-h2 { color:#A78BFA !important; font-size:1em !important; text-transform:uppercase; letter-spacing:.09em; }
-.stTabs [data-baseweb="tab"] { color:#666; }
-.stTabs [aria-selected="true"] { color:#A78BFA !important; }
-</style>
-"""
-st.markdown(CSS, unsafe_allow_html=True)
-
-handle_callback()
-
-for k, v in [('data_loaded', False), ('dfm', None), ('dfd', None),
-              ('lib', {}), ('playlists', []), ('mode', None)]:
-    if k not in st.session_state:
-        st.session_state[k] = v
-
-def parse_ext(r):
-    if not (r.get('master_metadata_track_name')
-            and str(r.get('spotify_track_uri', '')).startswith('spotify:track:')
-            and r.get('ms_played', 0) >= 10000):
-        return None
-    return {
-        'ts':         r['ts'],
-        'artistName': r.get('master_metadata_album_artist_name') or '',
-        'trackName':  r.get('master_metadata_track_name') or '',
-        'albumName':  r.get('master_metadata_album_album_name') or '',
-        'ms':         r['ms_played'],
-        'skipped':    bool(r.get('skipped', False)),
-        'reason_end': r.get('reason_end', ''),
-        'shuffle':    bool(r.get('shuffle', False)),
-        'track_uri':  r.get('spotify_track_uri', ''),
-        'platform':   r.get('platform', ''),
-    }
-
-def parse_std(r):
-    if not (r.get('trackName') and r.get('ms_played', 0) >= 10000):
-        return None
-    return {
-        'ts': r.get('endTime', ''), 'artistName': r.get('artistName', ''),
-        'trackName': r.get('trackName', ''), 'albumName': '',
-        'ms': r['ms_played'], 'skipped': r['ms_played'] < 30000,
-        'reason_end': '', 'shuffle': False, 'track_uri': '', 'platform': '',
-    }
-
-def make_df(records):
-    if not records:
-        return pd.DataFrame()
-    df = pd.DataFrame(records)
-    df['ts']    = pd.to_datetime(df['ts'], utc=True, errors='coerce').dt.tz_localize(None)
-    df['year']  = df['ts'].dt.year
-    df['month'] = df['ts'].dt.month
-    df['hour']  = df['ts'].dt.hour
-    df['dow']   = df['ts'].dt.dayofweek
-    df['ym']    = df['ts'].dt.to_period('M').astype(str)
-    return df
-
-def read_zip(uploaded):
-    records, lib, playlists, mode = [], {}, [], None
-    with zipfile.ZipFile(io.BytesIO(uploaded.read())) as z:
-        names = z.namelist()
-        ext = [n for n in names if 'Streaming_History_Audio_' in n and n.endswith('.json')]
-        std = [n for n in names if 'StreamingHistory_music_' in n and n.endswith('.json')]
-        lf  = next((n for n in names if 'YourLibrary.json' in n), None)
-        pfs = [n for n in names if 'Playlist' in n and n.endswith('.json')]
-        if ext:
-            mode = 'extended'
-            for fn in ext:
-                for r in json.loads(z.read(fn)):
-                    rec = parse_ext(r)
-                    if rec: records.append(rec)
-        elif std:
-            mode = 'standard'
-            for fn in std:
-                for r in json.loads(z.read(fn)):
-                    rec = parse_std(r)
-                    if rec: records.append(rec)
-        if lf:
-            lib = json.loads(z.read(lf))
-        for pf in pfs:
-            try:
-                playlists.extend(json.loads(z.read(pf)).get('playlists', []))
-            except:
-                pass
-    return records, lib, playlists, mode
-
-with st.sidebar:
     st.markdown(
-        "<div style='padding:16px 0 8px;text-align:center;'>"
-        "<div style='font-size:1.5em;font-weight:900;color:#fff;'>🎵 MusicDNA</div>"
-        "<div style='font-size:.68em;color:#555;margin-top:2px;'>powered by DhalsimStream</div>"
+        "<div style='text-align:center;padding:48px 0 24px;'>"
+        "<div style='font-size:3.5em;'>🎵</div>"
+        "<h1 style='font-size:3em;font-weight:900;margin:8px 0 4px;'>"
+        "Music<span style='color:#A78BFA;'>DNA</span></h1>"
+        "<p style='color:#555;font-size:.9em;margin:0 0 12px;'>powered by DhalsimStream</p>"
+        "<p style='color:#888;font-size:1.05em;line-height:1.8;max-width:520px;margin:0 auto 28px;'>"
+        "Spotify Wrapped tells you what you listened to.<br>"
+        "<b style='color:#fff;'>MusicDNA tells you who you are.</b>"
+        "</p>"
+        "<a href='" + auth_url + "' target='_self' "
+        "style='background:#1DB954;color:#000;font-weight:800;"
+        "padding:14px 36px;border-radius:30px;text-decoration:none;"
+        "font-size:1em;display:inline-block;margin-bottom:10px;'>"
+        "Connect Spotify — instant access</a>"
+        "<div style='color:#444;font-size:.78em;margin-top:8px;'>"
+        "Or upload your Extended History zip in the sidebar for the full 12-year analysis</div>"
         "</div>",
         unsafe_allow_html=True
     )
+
     st.markdown("---")
 
-    if not st.session_state.data_loaded:
+    st.markdown(
+        "<div style='text-align:center;margin-bottom:16px;'>"
+        "<div style='color:#A78BFA;font-size:.75em;font-weight:700;"
+        "text-transform:uppercase;letter-spacing:.1em;'>What your data reveals</div>"
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+    shocks = [
+        (c1, "45%",     "of liked tracks are never played",       "You collect music like books youll never read."),
+        (c2, "1,343h",  "of one users account was his daughters",  "Spotify saw he became a parent before he posted it anywhere."),
+        (c3, "2017-18", "peak listening years for most users",     "Life was different then. The data agrees."),
+        (c4, "17%",     "average skip rate",                       "Lower than you think. You are more committed than you admit."),
+    ]
+    for col, val, lbl, sub in shocks:
+        with col:
+            st.markdown(
+                "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
+                "border-radius:12px;padding:18px;text-align:center;'>"
+                "<div style='font-size:1.8em;font-weight:900;color:#A78BFA;'>" + val + "</div>"
+                "<div style='font-size:.75em;color:#888;margin:6px 0 8px;line-height:1.4;'>" + lbl + "</div>"
+                "<div style='font-size:.72em;color:#444;font-style:italic;line-height:1.4;'>" + sub + "</div>"
+                "</div>",
+                unsafe_allow_html=True
+            )
+
+    st.markdown(
+        "<div style='color:#A78BFA;font-size:.75em;font-weight:700;"
+        "text-transform:uppercase;letter-spacing:.1em;margin:20px 0 12px;'>"
+        "9 analyses — none of them are in Wrapped</div>",
+        unsafe_allow_html=True
+    )
+
+    features = [
+        ("🏠", "Musical Profile",   "12 years of listening history. Your eras, your evolution, your numbers."),
+        ("🎤", "Artists and Tracks","Your all-time top artists and tracks with yearly breakdowns."),
+        ("🕐", "Time Patterns",     "When you listen. Hour by hour, day by day. Your listening heatmap."),
+        ("👶", "Parent Mode",       "How parenthood rewrote your Spotify. Detected automatically."),
+        ("💔", "Likes Autopsy",     "45% of liked tracks never played. Who you think you are vs. reality."),
+        ("📋", "Playlist Autopsy",  "Active playlists vs archives. Plus merge candidates."),
+        ("😳", "Hall of Shame",     "Your most-played tracks judged. Sarcastically. Without mercy."),
+        ("⭐", "Celebrity Twin",    "Which public figures share your exact musical taste."),
+        ("🔮", "Musical Horoscope", "Your sign, your curse, your gift, your prediction. From real data."),
+    ]
+
+    cols = st.columns(3)
+    for i, (icon, title, desc) in enumerate(features):
+        with cols[i % 3]:
+            st.markdown(
+                "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
+                "border-left:3px solid #7C3AED;border-radius:8px;"
+                "padding:14px;margin-bottom:10px;'>"
+                "<div style='font-weight:700;margin-bottom:4px;'>" + icon + " " + title + "</div>"
+                "<div style='color:#555;font-size:.8em;line-height:1.5;'>" + desc + "</div>"
+                "</div>",
+                unsafe_allow_html=True
+            )
+
+    st.markdown("---")
+
+    st.markdown(
+        "<div style='background:#0f0505;border:1px solid #dc262633;"
+        "border-radius:14px;padding:24px;margin-bottom:20px;'>"
+        "<div style='color:#f87171;font-size:.75em;font-weight:700;"
+        "text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;'>"
+        "Parent Mode — unique to MusicDNA</div>"
+        "<div style='font-size:1.1em;font-weight:800;color:#fff;margin-bottom:8px;'>"
+        "Spotify knows when you became a parent.</div>"
+        "<div style='color:#888;font-size:.88em;line-height:1.8;'>"
+        "One month your listening is yours. The next it shifts — lullabies, nursery rhymes, "
+        "children songs on loop at 3am. MusicDNA detects this automatically and shows you "
+        "the exact month it happened.<br><br>"
+        "<b style='color:#ccc;'>You posted the birth announcement. "
+        "Spotify had already figured it out weeks earlier.</b>"
+        "</div>"
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
         st.markdown(
-            "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
-            "border-radius:8px;padding:14px;margin-bottom:12px;'>"
-            "<div style='color:#A78BFA;font-weight:700;font-size:.8em;"
-            "text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;'>"
-            "How to get started</div>"
-            "<div style='color:#666;font-size:.8em;line-height:2;'>"
-            "<b style='color:#ccc;'>Step 1</b> — Upload Extended History zip<br>"
-            "<b style='color:#ccc;'>Step 2</b> — Upload Standard Export zip<br>"
-            "<b style='color:#ccc;'>Step 3</b> — Click Analyse<br>"
-            "<b style='color:#ccc;'>Step 4</b> — Connect Spotify for Discovery"
+            "<div style='background:#0f0f0f;border:1px solid #1DB95433;"
+            "border-radius:12px;padding:18px;'>"
+            "<div style='color:#1DB954;font-weight:700;font-size:.82em;margin-bottom:10px;'>"
+            "OPTION 1 — Instant</div>"
+            "<div style='color:#888;font-size:.83em;line-height:2;'>"
+            "Click <b style='color:#fff;'>Connect Spotify</b> in the sidebar<br>"
+            "Works on mobile and desktop<br>"
+            "Get Discovery and recommendations now<br>"
+            "<span style='color:#444;'>6 months of history</span>"
+            "</div>"
+            "</div>",
+            unsafe_allow_html=True
+        )
+    with col2:
+        st.markdown(
+            "<div style='background:#0f0f0f;border:1px solid #A78BFA33;"
+            "border-radius:12px;padding:18px;'>"
+            "<div style='color:#A78BFA;font-weight:700;font-size:.82em;margin-bottom:10px;'>"
+            "OPTION 2 — Full depth (12+ years)</div>"
+            "<div style='color:#888;font-size:.83em;line-height:2;'>"
+            "1. Go to <b style='color:#fff;'>spotify.com/account/privacy</b><br>"
+            "2. Request <b style='color:#fff;'>Extended streaming history</b><br>"
+            "3. Wait up to 30 days for the email<br>"
+            "4. Upload both zips in the sidebar"
             "</div>"
             "</div>",
             unsafe_allow_html=True
         )
 
-    if is_authenticated():
-        st.success("Spotify connected")
-        if st.button("Disconnect", use_container_width=True):
-            del st.session_state['spotify_token']
-            st.rerun()
-    else:
-        auth_url = get_auth_url()
-        st.markdown(
-            "<a href='" + auth_url + "' target='_self' "
-            "style='display:block;background:#1DB954;color:#000;font-weight:800;"
-            "text-align:center;padding:10px;border-radius:8px;"
-            "text-decoration:none;font-size:.9em;margin-bottom:8px;'>"
-            "Step 4 — Connect Spotify</a>",
-            unsafe_allow_html=True
-        )
-        st.caption("Enables Discovery and recommendations")
+    st.markdown(
+        "<div style='text-align:center;padding:28px 0 12px;'>"
+        "<a href='" + auth_url + "' target='_self' "
+        "style='background:#7C3AED;color:#fff;font-weight:800;"
+        "padding:14px 36px;border-radius:30px;text-decoration:none;"
+        "font-size:1em;display:inline-block;'>"
+        "Start now — free, no account needed</a>"
+        "</div>",
+        unsafe_allow_html=True
+    )
 
-    st.markdown("---")
-
-    if not st.session_state.data_loaded:
-        st.markdown("**Step 1 — Extended History** *(required)*")
-        st.caption("Your full 12-year analysis. The big zip.")
-        zip1 = st.file_uploader("Extended history zip", type="zip",
-                                 key="zip1", label_visibility="collapsed")
-        st.markdown("**Step 2 — Standard Export** *(recommended)*")
-        st.caption("Unlocks Likes Autopsy and Playlist Autopsy. The small zip.")
-        zip2 = st.file_uploader("Standard export zip", type="zip",
-                                 key="zip2", label_visibility="collapsed")
-        if zip1:
-            if st.button("Step 3 — Analyse", use_container_width=True, type="primary"):
-                with st.spinner("Loading your history..."):
-                    records, lib, playlists, mode = read_zip(zip1)
-                    if zip2:
-                        _, lib2, pl2, _ = read_zip(zip2)
-                        if lib2: lib = lib2
-                        if pl2:  playlists = pl2
-                    if records:
-                        my_r, dau_r = split(records)
-                        st.session_state.dfm       = make_df(my_r)
-                        st.session_state.dfd       = make_df(dau_r)
-                        st.session_state.lib       = lib
-                        st.session_state.playlists = playlists
-                        st.session_state.mode      = mode
-                        st.session_state.data_loaded = True
-                        st.rerun()
-                    else:
-                        st.error("No music data found.")
-    else:
-        dfm  = st.session_state.dfm
-        dfd  = st.session_state.dfd
-        mode = st.session_state.mode
-        lib  = st.session_state.lib
-        if mode == 'extended':
-            st.success("Extended (" + str(int(dfm['year'].min())) + "-" + str(int(dfm['year'].max())) + ")")
-        else:
-            st.warning("Standard export (12 months only)")
-        if lib.get('tracks'):          st.success("Likes data loaded")
-        else:                          st.warning("No likes - upload standard zip")
-        if st.session_state.playlists: st.success("Playlist data loaded")
-        else:                          st.warning("No playlists - upload standard zip")
-        st.markdown("---")
-        if st.button("Load new file", use_container_width=True):
-            for k in ['data_loaded', 'dfm', 'dfd', 'lib', 'playlists', 'mode']:
-                st.session_state[k] = False if k == 'data_loaded' else ({} if k == 'lib' else ([] if k == 'playlists' else None))
-            st.rerun()
-
-    if st.session_state.data_loaded:
-        st.markdown("---")
-        page = st.radio("", [
-            "Overview", "Artists and Tracks", "Time Patterns",
-            "Parent Mode", "Likes Autopsy", "Playlist Autopsy",
-            "Hall of Shame", "Celebrity Twin", "Musical Horoscope",
-            "Discovery",
-        ], label_visibility="collapsed")
-        kids_on = st.toggle("Include daughters content", value=False)
-        dfm_ = st.session_state.dfm
-        if dfm_ is not None:
-            st.caption("Your music: " + str(len(dfm_)) + " plays - " + str(round(dfm_['ms'].sum()/3600000)) + "h")
-
-if not st.session_state.data_loaded and not is_authenticated():
-    import landing
-    landing.render(get_auth_url)
-    st.stop()
-
-if not st.session_state.data_loaded and is_authenticated():
-    import discovery
-    discovery.render(None)
-    st.stop()
-
-dfm       = st.session_state.dfm
-dfd       = st.session_state.dfd
-lib       = st.session_state.lib
-playlists = st.session_state.playlists
-kids_on   = False
-df        = pd.concat([dfm, dfd]) if (kids_on and not dfd.empty) else dfm
-
-if   "Overview"   in page: import overview;         overview.render(dfm, dfd, kids_on)
-elif "Artists"    in page: import artists;          artists.render(df)
-elif "Time"       in page: import time_patterns;    time_patterns.render(df)
-elif "Parent"     in page: import parent_mode;      parent_mode.render(dfm, dfd, [])
-elif "Likes"      in page: import likes_autopsy;    likes_autopsy.render(dfm, lib)
-elif "Playlist"   in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
-elif "Hall"       in page: import hall_of_shame;    hall_of_shame.render(dfm, lib)
-elif "Celebrity"  in page: import celebrity_twin;   celebrity_twin.render(dfm)
-elif "Horoscope"  in page: import horoscope;        horoscope.render(dfm, dfd)
-elif "Discovery"  in page: import discovery;        discovery.render(dfm)
+    st.markdown(
+        "<div style='text-align:center;padding:8px 0 32px;'>"
+        "<div style='color:#333;font-size:.75em;line-height:1.7;max-width:480px;margin:0 auto;'>"
+        "Your data never leaves your browser. "
+        "MusicDNA does not store, share or transmit any of your Spotify data. "
+        "All analysis runs locally in your session and is deleted when you close the tab."
+        "</div>"
+        "</div>",
+        unsafe_allow_html=True
+    )
