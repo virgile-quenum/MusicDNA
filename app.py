@@ -30,6 +30,12 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 handle_callback()
 
+# Debug OAuth
+if st.session_state.get('oauth_error'):
+    st.error("OAuth error: " + str(st.session_state['oauth_error']))
+if st.session_state.get('last_params'):
+    st.write("Last params received:", st.session_state['last_params'])
+
 for k, v in [('data_loaded', False), ('dfm', None), ('dfd', None),
               ('lib', {}), ('playlists', []), ('mode', None)]:
     if k not in st.session_state:
