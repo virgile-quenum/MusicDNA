@@ -1,70 +1,120 @@
 import streamlit as st
-import pandas as pd
-from spotify_auth import api_get
+import requests
+import urllib.parse
+import base64
+from datetime import datetime, timedelta
 
-def get_user_profile():
-    return api_get("me")
+SCOPES = " ".join([
+    "user-read-private",
+    "user-read-email",
+    "user-top-read",
+    "user-read-recently-played",
+    "playlist-read-private",
+    "playlist-read-collaborative",
+    "playlist-modify-public",
+    "playlist-modify-private",
+    "user-library-read",
+])
 
-def get_top_artists(time_range="medium_term", limit=20):
-    data = api_get("me/top/artists", {"time_range": time_range, "limit": limit})
-    if not data: return []
-    return data.get('items', [])
+def get_config():
+    try:
+        return (
+            st.secrets["SPOTIFY_CLIENT_ID"],
+            st.secrets["SPOTIFY_CLIENT_SECRET"],
+            st.secrets["REDIRECT_URI"],
+        )
+    except Exception:
+        return None, None, None
 
-def get_top_tracks(time_range="medium_term", limit=20):
-    data = api_get("me/top/tracks", {"time_range": time_range, "limit": limit})
-    if not data: return []
-    return data.get('items', [])
+def get_auth_url():
+    client_id, _, redirect_uri = get_config()
+    if not client_id:
+        return "#"
+    params = {
+        "client_id":     client_id,
+        "response_type": "code",
+        "redirect_uri":  redirect_uri,
+        "scope":         SCOPES,
+        "show_dialog":   "true",
+    }
+    return "https://accounts.spotify.com/authorize?" + urllib.parse.urlencode(params)
 
-def get_recently_played(limit=50):
-    data = api_get("me/player/recently-played", {"limit": limit})
-    if not data: return []
-    return data.get('items', [])
-
-def get_recommendations(seed_artists=None, seed_tracks=None, limit=20,
-                        min_popularity=0, max_popularity=100):
-    params = {"limit": limit,
-              "min_popularity": min_popularity,
-              "max_popularity": max_popularity}
-    if seed_artists: params["seed_artists"] = ",".join(seed_artists[:5])
-    if seed_tracks:  params["seed_tracks"]  = ",".join(seed_tracks[:5])
-    data = api_get("recommendations", params)
-    if not data: return []
-    return data.get('tracks', [])
-
-def get_audio_features(track_ids):
-    if not track_ids: return []
-    ids = ",".join(track_ids[:100])
-    data = api_get("audio-features", {"ids": ids})
-    if not data: return []
-    return [f for f in data.get('audio_features', []) if f]
-
-def create_playlist(user_id, name, track_uris):
-    token = st.session_state.get('spotify_token', {}).get('access_token')
-    if not token: return None
-    import requests, json
-    headers = {"Authorization": f"Bearer {token}",
-               "Content-Type": "application/json"}
+def exchange_code(code):
+    client_id, client_secret, redirect_uri = get_config()
+    if not client_id:
+        return None
+    creds = base64.b64encode((client_id + ":" + client_secret).encode()).decode()
     resp = requests.post(
-        f"https://api.spotify.com/v1/users/{user_id}/playlists",
-        headers=headers,
-        data=json.dumps({"name": name, "public": False,
-                         "description": "Created by MusicDNA"})
+        "https://accounts.spotify.com/api/token",
+        headers={"Authorization": "Basic " + creds,
+                 "Content-Type": "application/x-www-form-urlencoded"},
+        data={"grant_type": "authorization_code",
+              "code": code, "redirect_uri": redirect_uri}
     )
-    if resp.status_code != 201: return None
-    pl_id = resp.json()['id']
-    requests.post(
-        f"https://api.spotify.com/v1/playlists/{pl_id}/tracks",
-        headers=headers,
-        data=json.dumps({"uris": track_uris[:100]})
-    )
-    return resp.json().get('external_urls', {}).get('spotify')
+    if resp.status_code == 200:
+        data = resp.json()
+        data['expires_at'] = (datetime.now() + timedelta(seconds=data['expires_in'])).isoformat()
+        return data
+    return None
 
-def build_api_profile():
-    profile = {}
-    profile['user']           = get_user_profile()
-    profile['top_artists_short']  = get_top_artists('short_term',  20)
-    profile['top_artists_medium'] = get_top_artists('medium_term', 20)
-    profile['top_artists_long']   = get_top_artists('long_term',   20)
-    profile['top_tracks_medium']  = get_top_tracks('medium_term',  20)
-    profile['recent']             = get_recently_played(50)
-    return profile
+def refresh_token(refresh_tok):
+    client_id, client_secret, _ = get_config()
+    if not client_id:
+        return None
+    creds = base64.b64encode((client_id + ":" + client_secret).encode()).decode()
+    resp = requests.post(
+        "https://accounts.spotify.com/api/token",
+        headers={"Authorization": "Basic " + creds,
+                 "Content-Type": "application/x-www-form-urlencoded"},
+        data={"grant_type": "refresh_token", "refresh_token": refresh_tok}
+    )
+    if resp.status_code == 200:
+        data = resp.json()
+        data['expires_at'] = (datetime.now() + timedelta(seconds=data['expires_in'])).isoformat()
+        data['refresh_token'] = refresh_tok
+        return data
+    return None
+
+def get_valid_token():
+    if 'spotify_token' not in st.session_state:
+        return None
+    tok = st.session_state.spotify_token
+    try:
+        expires_at = datetime.fromisoformat(tok['expires_at'])
+        if datetime.now() >= expires_at - timedelta(minutes=5):
+            new_tok = refresh_token(tok.get('refresh_token'))
+            if new_tok:
+                st.session_state.spotify_token = new_tok
+                return new_tok['access_token']
+            return None
+        return tok['access_token']
+    except Exception:
+        return None
+
+def api_get(endpoint, params=None):
+    token = get_valid_token()
+    if not token:
+        return None
+    try:
+        resp = requests.get(
+            "https://api.spotify.com/v1/" + endpoint,
+            headers={"Authorization": "Bearer " + token},
+            params=params or {}
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception:
+        pass
+    return None
+
+def is_authenticated():
+    return get_valid_token() is not None
+
+def handle_callback():
+    try:
+        params = st.query_params
+        if 'code' in params and 'spotify_token' not in st.session_state:
+            code = params['code']
+            token_data = exchange_code(code)
+            if token_data:
+                st.
