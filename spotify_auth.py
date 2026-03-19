@@ -55,6 +55,8 @@ def exchange_code(code):
         data = resp.json()
         data['expires_at'] = (datetime.now() + timedelta(seconds=data['expires_in'])).isoformat()
         return data
+    else:
+        st.session_state['oauth_error'] = str(resp.status_code) + " " + resp.text
     return None
 
 def refresh_token(refresh_tok):
@@ -112,13 +114,18 @@ def is_authenticated():
 
 def handle_callback():
     try:
-        params = st.query_params
-        if 'code' in params and 'spotify_token' not in st.session_state:
-            code = params['code']
+        all_params = dict(st.query_params)
+        if all_params:
+            st.session_state['last_params'] = all_params
+        if 'code' in all_params and 'spotify_token' not in st.session_state:
+            code = all_params['code']
             token_data = exchange_code(code)
             if token_data:
                 st.session_state.spotify_token = token_data
                 st.query_params.clear()
                 st.rerun()
-    except Exception:
-        pass
+        if 'error' in all_params:
+            st.session_state['oauth_error'] = all_params['error']
+            st.query_params.clear()
+    except Exception as e:
+        st.session_state['oauth_error'] = str(e)
