@@ -117,4 +117,8 @@ def handle_callback():
             code = params['code']
             token_data = exchange_code(code)
             if token_data:
-                st.
+                st.session_state.spotify_token = token_data
+                st.query_params.clear()
+                st.rerun()
+    except Exception:
+        pass
