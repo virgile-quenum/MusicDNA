@@ -30,7 +30,6 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 handle_callback()
 
-# Debug OAuth
 if st.session_state.get('oauth_error'):
     st.error("OAuth error: " + str(st.session_state['oauth_error']))
 if st.session_state.get('last_params'):
@@ -145,11 +144,11 @@ with st.sidebar:
     else:
         auth_url = get_auth_url()
         st.markdown(
-            "<a href='" + auth_url + "' target='_self' "
+            "<a href='" + auth_url + "' target='_top' "
             "style='display:block;background:#1DB954;color:#000;font-weight:800;"
             "text-align:center;padding:10px;border-radius:8px;"
             "text-decoration:none;font-size:.9em;margin-bottom:8px;'>"
-            "Step 4 — Connect Spotify</a>",
+            "Connect Spotify</a>",
             unsafe_allow_html=True
         )
         st.caption("Enables Discovery and recommendations")
