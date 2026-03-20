@@ -209,7 +209,7 @@ with st.sidebar:
 
 if not st.session_state.data_loaded and not is_authenticated():
     import landing
-    landing.render(get_auth_url, render_connect_button)
+    landing.render(get_auth_url)
     st.stop()
 
 if not st.session_state.data_loaded and is_authenticated():
