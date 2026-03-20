@@ -39,6 +39,24 @@ def get_auth_url():
     }
     return "https://accounts.spotify.com/authorize?" + urllib.parse.urlencode(params)
 
+def render_connect_button(label="Connect Spotify"):
+    auth_url = get_auth_url()
+    button_html = (
+        "<script>"
+        "function connectSpotify() {"
+        "window.parent.location.href = '" + auth_url + "';"
+        "}"
+        "</script>"
+        "<button onclick='connectSpotify()' style='"
+        "display:block;width:100%;background:#1DB954;color:#000;"
+        "font-weight:800;text-align:center;padding:12px;border-radius:8px;"
+        "border:none;font-size:.95em;cursor:pointer;"
+        "font-family:Inter,sans-serif;'>"
+        + label +
+        "</button>"
+    )
+    st.components.v1.html(button_html, height=55)
+
 def exchange_code(code):
     client_id, client_secret, redirect_uri = get_config()
     if not client_id:
