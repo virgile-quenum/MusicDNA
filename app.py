@@ -36,7 +36,7 @@ if st.session_state.get('last_params'):
     st.write("Last params received:", st.session_state['last_params'])
 
 for k, v in [('data_loaded', False), ('dfm', None), ('dfd', None),
-              ('lib', {}), ('playlists', []), ('mode', None)]:
+              ('lib', {}), ('playlists', []), ('mode', None), ('_page', 'Overview')]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -196,7 +196,7 @@ with st.sidebar:
 
     if st.session_state.data_loaded:
         st.markdown("---")
-        page = st.radio("", [
+        st.session_state['_page'] = st.radio("", [
             "Overview", "Artists and Tracks", "Time Patterns",
             "Parent Mode", "Likes Autopsy", "Playlist Autopsy",
             "Hall of Shame", "Celebrity Twin", "Musical Horoscope",
@@ -222,7 +222,8 @@ dfd       = st.session_state.dfd
 lib       = st.session_state.lib
 playlists = st.session_state.playlists
 kids_on   = False
-df        = pd.concat([dfm, dfd]) if (kids_on and not dfd.empty) else dfm
+df        = pd.concat([dfm, dfd]) if (kids_on and dfd is not None and not dfd.empty) else dfm
+page      = st.session_state.get('_page', 'Overview')
 
 if   "Overview"   in page: import overview;         overview.render(dfm, dfd, kids_on)
 elif "Artists"    in page: import artists;          artists.render(df)
