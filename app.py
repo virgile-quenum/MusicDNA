@@ -4,7 +4,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(__file__))
 from filters import split
-from spotify_auth import handle_callback, is_authenticated, get_auth_url
+from spotify_auth import handle_callback, is_authenticated, get_auth_url, render_connect_button
 
 st.set_page_config(page_title="MusicDNA", page_icon="🎵",
                    layout="wide", initial_sidebar_state="expanded")
@@ -142,15 +142,7 @@ with st.sidebar:
             del st.session_state['spotify_token']
             st.rerun()
     else:
-        auth_url = get_auth_url()
-        st.markdown(
-            "<a href='" + auth_url + "' target='_top' "
-            "style='display:block;background:#1DB954;color:#000;font-weight:800;"
-            "text-align:center;padding:10px;border-radius:8px;"
-            "text-decoration:none;font-size:.9em;margin-bottom:8px;'>"
-            "Connect Spotify</a>",
-            unsafe_allow_html=True
-        )
+        render_connect_button("Connect Spotify")
         st.caption("Enables Discovery and recommendations")
 
     st.markdown("---")
@@ -217,7 +209,7 @@ with st.sidebar:
 
 if not st.session_state.data_loaded and not is_authenticated():
     import landing
-    landing.render(get_auth_url)
+    landing.render(get_auth_url, render_connect_button)
     st.stop()
 
 if not st.session_state.data_loaded and is_authenticated():
