@@ -17,14 +17,18 @@ SCOPES = " ".join([
 ])
 
 def get_config():
-    try:
-        return (
-            st.secrets["SPOTIFY_CLIENT_ID"],
-            st.secrets["SPOTIFY_CLIENT_SECRET"],
-            st.secrets["REDIRECT_URI"],
-        )
-    except Exception:
-        return None, None, None
+    import os
+    client_id     = os.environ.get("SPOTIFY_CLIENT_ID")
+    client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
+    redirect_uri  = os.environ.get("REDIRECT_URI")
+    if not client_id:
+        try:
+            client_id     = st.secrets["SPOTIFY_CLIENT_ID"]
+            client_secret = st.secrets["SPOTIFY_CLIENT_SECRET"]
+            redirect_uri  = st.secrets["REDIRECT_URI"]
+        except Exception:
+            pass
+    return client_id, client_secret, redirect_uri
 
 def get_auth_url():
     client_id, _, redirect_uri = get_config()
