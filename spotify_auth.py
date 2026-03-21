@@ -41,21 +41,15 @@ def get_auth_url():
 
 def render_connect_button(label="Connect Spotify"):
     auth_url = get_auth_url()
-    button_html = (
-        "<script>"
-        "function connectSpotify() {"
-        "window.parent.location.href = '" + auth_url + "';"
-        "}"
-        "</script>"
-        "<button onclick='connectSpotify()' style='"
-        "display:block;width:100%;background:#1DB954;color:#000;"
+    st.markdown(
+        "<a href='" + auth_url + "' target='_blank' "
+        "style='display:block;width:100%;background:#1DB954;color:#000;"
         "font-weight:800;text-align:center;padding:12px;border-radius:8px;"
-        "border:none;font-size:.95em;cursor:pointer;"
-        "font-family:Inter,sans-serif;'>"
+        "text-decoration:none;font-size:.95em;margin-bottom:4px;'>"
         + label +
-        "</button>"
+        "</a>",
+        unsafe_allow_html=True
     )
-    st.components.v1.html(button_html, height=55)
 
 def exchange_code(code):
     client_id, client_secret, redirect_uri = get_config()
