@@ -11,8 +11,9 @@ def render(dfm=None):
         from spotify_auth import is_authenticated, api_get
         from spotify_api import get_top_artists, get_recommendations, create_playlist
         authenticated = is_authenticated()
-    except Exception:
-        authenticated = False
+    except Exception as e:
+        st.error("Import error: " + str(e))
+        return
 
     if not authenticated:
         st.warning("Connect your Spotify account to get personalized recommendations.")
@@ -33,14 +34,18 @@ def render(dfm=None):
                                       ["Last 6 months", "Last 4 weeks", "All time"], index=0)
         tr_map = {"Last 6 months": "medium_term", "Last 4 weeks": "short_term", "All time": "long_term"}
 
-        with st.spinner("Finding artists matched to your taste..."):
-            top = get_top_artists(tr_map[time_range], 5)
-            if not top:
-                st.error("Could not load your top artists.")
-                return
-            seed_ids = [a['id'] for a in top]
-            max_pop  = 50 if underground else 100
-            recs = get_recommendations(seed_artists=seed_ids, limit=limit, max_popularity=max_pop)
+        try:
+            with st.spinner("Finding artists matched to your taste..."):
+                top = get_top_artists(tr_map[time_range], 5)
+                if not top:
+                    st.error("Could not load your top artists. Make sure Spotify is connected.")
+                    return
+                seed_ids = [a['id'] for a in top]
+                max_pop  = 50 if underground else 100
+                recs = get_recommendations(seed_artists=seed_ids, limit=limit, max_popularity=max_pop)
+        except Exception as e:
+            st.error("Error loading recommendations: " + str(e))
+            return
 
         if not recs:
             st.info("No recommendations found. Try changing the filters.")
@@ -64,7 +69,7 @@ def render(dfm=None):
             st.success("You already know all the recommended artists. Impressive.")
             return
 
-        st.markdown("**" + str(len(new_artists)) + " artists matched to your taste that you have never played:**")
+        st.markdown("**" + str(len(new_artists)) + " artists matched to your taste:**")
         st.markdown("---")
 
         cols = st.columns(2)
@@ -104,13 +109,17 @@ def render(dfm=None):
 
     with tab2:
         st.markdown("### Tracks That Match Your Musical DNA")
-        with st.spinner("Loading track recommendations..."):
-            top_tracks = api_get("me/top/tracks", {"time_range": "medium_term", "limit": 5})
-            if not top_tracks:
-                st.error("Could not load your top tracks.")
-                return
-            seed_track_ids = [t['id'] for t in top_tracks.get('items', [])]
-            rec_tracks = get_recommendations(seed_tracks=seed_track_ids, limit=20)
+        try:
+            with st.spinner("Loading track recommendations..."):
+                top_tracks = api_get("me/top/tracks", {"time_range": "medium_term", "limit": 5})
+                if not top_tracks:
+                    st.error("Could not load your top tracks.")
+                    return
+                seed_track_ids = [t['id'] for t in top_tracks.get('items', [])]
+                rec_tracks = get_recommendations(seed_tracks=seed_track_ids, limit=20)
+        except Exception as e:
+            st.error("Error loading track recommendations: " + str(e))
+            return
 
         if not rec_tracks:
             st.info("No track recommendations found.")
