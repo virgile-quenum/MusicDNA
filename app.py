@@ -217,6 +217,9 @@ if not st.session_state.data_loaded and is_authenticated():
     discovery.render(None)
     st.stop()
 
+if not st.session_state.data_loaded:
+    st.stop()
+
 dfm       = st.session_state.dfm
 dfd       = st.session_state.dfd
 lib       = st.session_state.lib
