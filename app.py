@@ -30,11 +30,6 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 handle_callback()
 
-if st.session_state.get('oauth_error'):
-    st.error("OAuth error: " + str(st.session_state['oauth_error']))
-if st.session_state.get('last_params'):
-    st.write("Last params received:", st.session_state['last_params'])
-
 for k, v in [('data_loaded', False), ('dfm', None), ('dfd', None),
               ('lib', {}), ('playlists', []), ('mode', None), ('_page', 'Overview')]:
     if k not in st.session_state:
@@ -172,69 +167,3 @@ with st.sidebar:
                         st.session_state.playlists = playlists
                         st.session_state.mode      = mode
                         st.session_state.data_loaded = True
-                        st.rerun()
-                    else:
-                        st.error("No music data found.")
-    else:
-        dfm  = st.session_state.dfm
-        dfd  = st.session_state.dfd
-        mode = st.session_state.mode
-        lib  = st.session_state.lib
-        if mode == 'extended':
-            st.success("Extended (" + str(int(dfm['year'].min())) + "-" + str(int(dfm['year'].max())) + ")")
-        else:
-            st.warning("Standard export (12 months only)")
-        if lib.get('tracks'):          st.success("Likes data loaded")
-        else:                          st.warning("No likes - upload standard zip")
-        if st.session_state.playlists: st.success("Playlist data loaded")
-        else:                          st.warning("No playlists - upload standard zip")
-        st.markdown("---")
-        if st.button("Load new file", use_container_width=True):
-            for k in ['data_loaded', 'dfm', 'dfd', 'lib', 'playlists', 'mode']:
-                st.session_state[k] = False if k == 'data_loaded' else ({} if k == 'lib' else ([] if k == 'playlists' else None))
-            st.rerun()
-
-    if st.session_state.data_loaded:
-        st.markdown("---")
-        st.session_state['_page'] = st.radio("", [
-            "Overview", "Artists and Tracks", "Time Patterns",
-            "Parent Mode", "Likes Autopsy", "Playlist Autopsy",
-            "Hall of Shame", "Celebrity Twin", "Musical Horoscope",
-            "Discovery",
-        ], label_visibility="collapsed")
-        kids_on = st.toggle("Include daughters content", value=False)
-        dfm_ = st.session_state.dfm
-        if dfm_ is not None:
-            st.caption("Your music: " + str(len(dfm_)) + " plays - " + str(round(dfm_['ms'].sum()/3600000)) + "h")
-
-if not st.session_state.data_loaded and not is_authenticated():
-    import landing
-    landing.render(get_auth_url)
-    st.stop()
-
-if not st.session_state.data_loaded and is_authenticated():
-    import discovery
-    discovery.render(None)
-    st.stop()
-
-if not st.session_state.data_loaded:
-    st.stop()
-
-dfm       = st.session_state.dfm
-dfd       = st.session_state.dfd
-lib       = st.session_state.lib
-playlists = st.session_state.playlists
-kids_on   = False
-df        = pd.concat([dfm, dfd]) if (kids_on and dfd is not None and not dfd.empty) else dfm
-page      = st.session_state.get('_page', 'Overview')
-
-if   "Overview"   in page: import overview;         overview.render(dfm, dfd, kids_on)
-elif "Artists"    in page: import artists;          artists.render(df)
-elif "Time"       in page: import time_patterns;    time_patterns.render(df)
-elif "Parent"     in page: import parent_mode;      parent_mode.render(dfm, dfd, [])
-elif "Likes"      in page: import likes_autopsy;    likes_autopsy.render(dfm, lib)
-elif "Playlist"   in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
-elif "Hall"       in page: import hall_of_shame;    hall_of_shame.render(dfm, lib)
-elif "Celebrity"  in page: import celebrity_twin;   celebrity_twin.render(dfm)
-elif "Horoscope"  in page: import horoscope;        horoscope.render(dfm, dfd)
-elif "Discovery"  in page: import discovery;        discovery.render(dfm)
