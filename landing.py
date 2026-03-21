@@ -18,8 +18,6 @@ def render(get_auth_url_fn):
         "padding:14px 36px;border-radius:30px;text-decoration:none;"
         "font-size:1em;display:inline-block;margin-bottom:10px;'>"
         "Connect Spotify — instant access</a>"
-        "<div style='color:#444;font-size:.78em;margin-top:8px;'>"
-        "Or upload your Extended History zip in the sidebar for the full 12-year analysis</div>"
         "</div>",
         unsafe_allow_html=True
     )
@@ -36,8 +34,8 @@ def render(get_auth_url_fn):
 
     c1, c2, c3, c4 = st.columns(4)
     shocks = [
-        (c1, "45%",     "of liked tracks are never played",       "You collect music like books youll never read."),
-        (c2, "1,343h",  "of one users account was his daughters",  "Spotify saw he became a parent before he posted it anywhere."),
+        (c1, "45%",     "of liked tracks are never played",       "You collect music like books you'll never read."),
+        (c2, "1,343h",  "of one user's account was his daughters", "Spotify saw he became a parent before he posted it anywhere."),
         (c3, "2017-18", "peak listening years for most users",     "Life was different then. The data agrees."),
         (c4, "17%",     "average skip rate",                       "Lower than you think. You are more committed than you admit."),
     ]
@@ -105,38 +103,6 @@ def render(get_auth_url_fn):
         "</div>",
         unsafe_allow_html=True
     )
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(
-            "<div style='background:#0f0f0f;border:1px solid #1DB95433;"
-            "border-radius:12px;padding:18px;'>"
-            "<div style='color:#1DB954;font-weight:700;font-size:.82em;margin-bottom:10px;'>"
-            "OPTION 1 — Instant</div>"
-            "<div style='color:#888;font-size:.83em;line-height:2;'>"
-            "Click <b style='color:#fff;'>Connect Spotify</b> in the sidebar<br>"
-            "Works on mobile and desktop<br>"
-            "Get Discovery and recommendations now<br>"
-            "<span style='color:#444;'>6 months of history</span>"
-            "</div>"
-            "</div>",
-            unsafe_allow_html=True
-        )
-    with col2:
-        st.markdown(
-            "<div style='background:#0f0f0f;border:1px solid #A78BFA33;"
-            "border-radius:12px;padding:18px;'>"
-            "<div style='color:#A78BFA;font-weight:700;font-size:.82em;margin-bottom:10px;'>"
-            "OPTION 2 — Full depth (12+ years)</div>"
-            "<div style='color:#888;font-size:.83em;line-height:2;'>"
-            "1. Go to <b style='color:#fff;'>spotify.com/account/privacy</b><br>"
-            "2. Request <b style='color:#fff;'>Extended streaming history</b><br>"
-            "3. Wait up to 30 days for the email<br>"
-            "4. Upload both zips in the sidebar"
-            "</div>"
-            "</div>",
-            unsafe_allow_html=True
-        )
 
     st.markdown(
         "<div style='text-align:center;padding:28px 0 12px;'>"
