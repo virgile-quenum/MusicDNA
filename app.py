@@ -274,3 +274,80 @@ with st.sidebar:
 
     else:
         dfm_  = st.session_state.dfm
+        mode_ = st.session_state.mode
+        lib_  = st.session_state.lib
+
+        if mode_ == 'extended':
+            st.success("Extended (" + str(int(dfm_['year'].min())) + "–" + str(int(dfm_['year'].max())) + ")")
+        else:
+            st.warning("Standard export (12 months only)")
+
+        has_likes     = bool(lib_.get('tracks')) if isinstance(lib_, dict) else bool(lib_)
+        has_playlists = bool(st.session_state.playlists)
+        if not has_likes:     st.warning("No likes — upload standard zip")
+        if not has_playlists: st.warning("No playlists — upload standard zip")
+
+        st.markdown("---")
+        if st.button("Load new file", use_container_width=True):
+            for k in ['data_loaded','dfm','dfd','lib','playlists','mode',
+                      '_zip1_bytes','_zip2_bytes','dfp']:
+                st.session_state[k] = False if k=='data_loaded' else ({} if k=='lib' else ([] if k=='playlists' else None))
+            st.rerun()
+
+        st.markdown("---")
+
+        nav_pages = PAGES_BASE.copy()
+        if is_authenticated():
+            st.markdown(
+                "<div style='color:#1DB954;font-size:.72em;font-weight:700;"
+                "text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;'>"
+                "Full DNA unlocked</div>",
+                unsafe_allow_html=True
+            )
+            nav_pages += PAGES_FULL_DNA
+
+        st.session_state['_page'] = st.radio("", nav_pages, label_visibility="collapsed")
+
+        kids_on = st.toggle("Include children's content", value=False)
+        st.session_state['kids_on'] = kids_on
+        st.caption(
+            "Your music: " + str(len(dfm_)) + " plays · "
+            + str(round(dfm_['ms'].sum() / 3600000)) + "h"
+        )
+
+page = st.session_state.get('_page', 'Overview')
+
+if not st.session_state.data_loaded and not is_authenticated():
+    import landing
+    landing.render(get_auth_url)
+    st.stop()
+
+if not st.session_state.data_loaded and is_authenticated():
+    import spotify_mode
+    spotify_mode.render()
+    st.stop()
+
+if not st.session_state.data_loaded:
+    st.stop()
+
+dfm       = st.session_state.dfm
+dfd       = st.session_state.dfd
+lib       = st.session_state.lib
+playlists = st.session_state.playlists
+dfp       = st.session_state.get('dfp', pd.DataFrame())
+kids_on   = st.session_state.get('kids_on', False)
+df        = pd.concat([dfm, dfd]) if (kids_on and dfd is not None and not dfd.empty) else dfm
+
+if   "Overview"           in page: import overview;         overview.render(dfm, dfd, kids_on)
+elif "Musical Horoscope"  in page: import horoscope;        horoscope.render(dfm, dfd, lib)
+elif "Likes Autopsy"      in page: import likes_autopsy;    likes_autopsy.render(dfm, lib)
+elif "Playlist Autopsy"   in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
+elif "Explore"            in page: import explore;          explore.render(dfm)
+elif "Forgotten"          in page: import forgotten;        forgotten.render(dfm)
+elif "Hall of Shame"      in page: import hall_of_shame;    hall_of_shame.render(dfm, lib, playlists)
+elif "Parent Mode"        in page: import parent_mode;      parent_mode.render(dfm, dfd, [])
+elif "Celebrity Twin"     in page: import celebrity_twin;   celebrity_twin.render(dfm)
+elif "Artists and Tracks" in page: import artists;          artists.render(df)
+elif "Time Patterns"      in page: import time_patterns;    time_patterns.render(df)
+elif "Podcast Autopsy"    in page: import podcast_autopsy;  podcast_autopsy.render(dfp)
+elif "Audio Profile"      in page: import audio_profile;    audio_profile.render(dfm)
