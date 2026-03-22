@@ -1,6 +1,7 @@
 import streamlit as st
 import json, zipfile, io, sys, os
 import pandas as pd
+import hashlib
 
 sys.path.insert(0, os.path.dirname(__file__))
 from filters import split
@@ -32,9 +33,40 @@ handle_callback()
 
 for k, v in [('data_loaded', False), ('dfm', None), ('dfd', None),
               ('lib', {}), ('playlists', []), ('mode', None),
-              ('_page', 'Overview'), ('kids_on', False)]:
+              ('_page', 'Overview'), ('kids_on', False),
+              ('_cache_key', None)]:
     if k not in st.session_state:
         st.session_state[k] = v
+
+# ── Cache helpers ─────────────────────────────────────────────────────────────
+
+def _make_cache_key(token_data):
+    """Stable key from Spotify token — survives reruns and OAuth redirects."""
+    if not token_data:
+        return None
+    raw = token_data.get('refresh_token', '') or token_data.get('access_token', '')
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+@st.cache_data(show_spinner=False)
+def _cached_data(cache_key, zip1_bytes, zip2_bytes):
+    """Parse and cache zip data keyed by (cache_key, file hash).
+    Streamlit cache_data persists across reruns within the same server process."""
+    return _parse_zips(zip1_bytes, zip2_bytes)
+
+def _get_cache_key():
+    tok = st.session_state.get('spotify_token')
+    if tok:
+        return _make_cache_key(tok)
+    return None
+
+def _restore_from_cache(cache_key, zip1_bytes, zip2_bytes):
+    """Try to get cached data for this cache_key + file combo."""
+    try:
+        return _cached_data(cache_key, zip1_bytes, zip2_bytes)
+    except Exception:
+        return None
+
+# ── Zip parsing ───────────────────────────────────────────────────────────────
 
 def parse_ext(r):
     if not (r.get('master_metadata_track_name')
@@ -76,9 +108,9 @@ def make_df(records):
     df['ym']    = df['ts'].dt.to_period('M').astype(str)
     return df
 
-def read_zip(uploaded):
+def _parse_single_zip(data):
     records, lib, playlists, mode = [], {}, [], None
-    with zipfile.ZipFile(io.BytesIO(uploaded.read())) as z:
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
         names = z.namelist()
         ext = [n for n in names if 'Streaming_History_Audio_' in n and n.endswith('.json')]
         std = [n for n in names if 'StreamingHistory_music_' in n and n.endswith('.json')]
@@ -106,6 +138,51 @@ def read_zip(uploaded):
                 pass
     return records, lib, playlists, mode
 
+def _parse_zips(zip1_bytes, zip2_bytes):
+    """Full parse — called by cache_data."""
+    records, lib, playlists, mode = _parse_single_zip(zip1_bytes)
+    if zip2_bytes:
+        _, lib2, pl2, _ = _parse_single_zip(zip2_bytes)
+        if lib2: lib = lib2
+        if pl2:  playlists = pl2
+    if not records:
+        return None
+    my_r, dau_r = split(records)
+    return {
+        'dfm':       make_df(my_r),
+        'dfd':       make_df(dau_r),
+        'lib':       lib,
+        'playlists': playlists,
+        'mode':      mode,
+    }
+
+def _load_into_session(parsed):
+    if not parsed:
+        return False
+    st.session_state.dfm       = parsed['dfm']
+    st.session_state.dfd       = parsed['dfd']
+    st.session_state.lib       = parsed['lib']
+    st.session_state.playlists = parsed['playlists']
+    st.session_state.mode      = parsed['mode']
+    st.session_state.data_loaded = True
+    return True
+
+# ── Auto-restore from cache on OAuth return ───────────────────────────────────
+# If session was wiped by OAuth redirect but cache_data still holds the parsed data,
+# restore it automatically using the stored file bytes in session.
+
+if (not st.session_state.data_loaded
+        and is_authenticated()
+        and st.session_state.get('_zip1_bytes') is not None):
+    cached = _cached_data(
+        _get_cache_key() or 'anon',
+        st.session_state['_zip1_bytes'],
+        st.session_state.get('_zip2_bytes')
+    )
+    if cached:
+        _load_into_session(cached)
+        st.rerun()
+
 PAGES_BASE = [
     "Overview", "Musical Horoscope", "Likes Autopsy", "Playlist Autopsy",
     "Discovery", "Hall of Shame", "Parent Mode", "Celebrity Twin",
@@ -131,14 +208,10 @@ with st.sidebar:
             del st.session_state['spotify_token']
             st.rerun()
     else:
-        # warn if files are loaded — connecting will wipe session
         if st.session_state.data_loaded:
-            st.warning(
-                "Connecting Spotify will reload the page and your files will need "
-                "to be re-uploaded. Connect Spotify first next time."
-            )
+            st.warning("Connecting Spotify will reload the page. Your files will be restored automatically.")
         render_connect_button("Connect Spotify")
-        st.caption("Connect first — then upload your files to keep your session.")
+        st.caption("Connect first — files are restored automatically after.")
 
     st.markdown("---")
 
@@ -168,19 +241,14 @@ with st.sidebar:
         if zip1:
             if st.button("Analyse", use_container_width=True, type="primary"):
                 with st.spinner("Loading your history..."):
-                    records, lib, playlists, mode = read_zip(zip1)
-                    if zip2:
-                        _, lib2, pl2, _ = read_zip(zip2)
-                        if lib2: lib = lib2
-                        if pl2:  playlists = pl2
-                    if records:
-                        my_r, dau_r = split(records)
-                        st.session_state.dfm       = make_df(my_r)
-                        st.session_state.dfd       = make_df(dau_r)
-                        st.session_state.lib       = lib
-                        st.session_state.playlists = playlists
-                        st.session_state.mode      = mode
-                        st.session_state.data_loaded = True
+                    zip1_bytes = zip1.read()
+                    zip2_bytes = zip2.read() if zip2 else None
+                    # store bytes in session for post-OAuth restore
+                    st.session_state['_zip1_bytes'] = zip1_bytes
+                    st.session_state['_zip2_bytes'] = zip2_bytes
+                    cache_key = _get_cache_key() or 'anon'
+                    parsed = _cached_data(cache_key, zip1_bytes, zip2_bytes)
+                    if _load_into_session(parsed):
                         st.rerun()
                     else:
                         st.error("No music data found.")
@@ -208,7 +276,8 @@ with st.sidebar:
 
         st.markdown("---")
         if st.button("Load new file", use_container_width=True):
-            for k in ['data_loaded','dfm','dfd','lib','playlists','mode']:
+            for k in ['data_loaded','dfm','dfd','lib','playlists','mode',
+                      '_zip1_bytes','_zip2_bytes']:
                 st.session_state[k] = False if k=='data_loaded' else ({} if k=='lib' else ([] if k=='playlists' else None))
             st.rerun()
 
