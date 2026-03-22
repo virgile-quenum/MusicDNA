@@ -260,3 +260,77 @@ def render(dfm, dfd=None, lib=None):
 
     with tab1:
         st.markdown(
+            "<div style='background:linear-gradient(135deg,#06060f,#0a001a,#030d06);"
+            "border:1px solid #7C3AED55;border-radius:20px;padding:36px;"
+            "text-align:center;margin-bottom:28px;'>"
+            "<div style='font-size:3.5em;margin-bottom:8px;'>" + matched_sign.get("emoji","🎵") + "</div>"
+            "<div style='font-size:.7em;color:#444;text-transform:uppercase;"
+            "letter-spacing:.14em;margin-bottom:6px;'>Your Musical Sign</div>"
+            "<div style='font-size:2em;font-weight:900;color:#A78BFA;'>"
+            + matched_sign["name"] + "</div>"
+            "<div style='color:#333;font-size:.82em;margin-top:10px;font-style:italic;'>"
+            + _format(matched_sign.get("data_line",""), stats) + "</div>"
+            "</div>",
+            unsafe_allow_html=True
+        )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("<div style='color:#f87171;font-size:.72em;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;'>Your Curse</div>", unsafe_allow_html=True)
+            st.markdown("<div style='background:#0f0505;border-left:3px solid #f87171;border-radius:6px;padding:14px 16px;color:#ccc;font-size:.88em;line-height:1.7;margin-bottom:16px;'>" + _format(matched_sign["curse"], stats) + "</div>", unsafe_allow_html=True)
+            st.markdown("<div style='color:#1DB954;font-size:.72em;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;'>Your Gift</div>", unsafe_allow_html=True)
+            st.markdown("<div style='background:#050f05;border-left:3px solid #1DB954;border-radius:6px;padding:14px 16px;color:#ccc;font-size:.88em;line-height:1.7;'>" + _format(matched_sign["gift"], stats) + "</div>", unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("<div style='color:#A78BFA;font-size:.72em;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;'>Your Prediction</div>", unsafe_allow_html=True)
+            st.markdown("<div style='background:#0a0520;border-left:3px solid #7C3AED;border-radius:6px;padding:14px 16px;color:#ccc;font-size:.88em;line-height:1.7;margin-bottom:16px;'>" + _format(matched_sign["prediction"], stats) + "</div>", unsafe_allow_html=True)
+            st.markdown("<div style='color:#555;font-size:.72em;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;'>Your Numbers</div>", unsafe_allow_html=True)
+            rows = [
+                ("Total artists",      f"{stats['unique_artists']:,}"),
+                ("Years of history",   str(stats["n_years"]) + " years"),
+                ("Saturday share",     f"{stats['sat_pct']:.0f}%"),
+                ("Morning listening",  f"{stats['morning_pct']:.0f}%"),
+                ("Night listening",    f"{stats['night_pct']:.0f}%"),
+                ("Skip rate",          f"{stats['skip_rate']:.0f}%"),
+                ("Shuffle rate",       f"{stats['shuffle_pct']:.0f}%"),
+                ("Binge sessions",     str(stats["binge_sessions"]) + " sessions ≥2h"),
+                ("Top artist share",   f"{stats['top_artist_pct']:.0f}% → {stats['top_artist']}"),
+                ("Tracks/artist avg",  f"{stats['tracks_per_artist']:.1f}"),
+            ]
+            if stats["kids_pct"] > 1:
+                rows.append(("Children's content", f"{stats['kids_pct']:.0f}%"))
+            html = "<div style='background:#0f0f0f;border:1px solid #1e1e1e;border-radius:10px;padding:14px;'>"
+            for lbl, val in rows:
+                html += ("<div style='display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:.82em;'>"
+                         "<span style='color:#555;'>" + lbl + "</span>"
+                         "<span style='color:#fff;font-weight:700;'>" + val + "</span></div>")
+            html += "</div>"
+            st.markdown(html, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("**Share your sign:**")
+        st.code(matched_sign.get("emoji","🎵") + " I am " + matched_sign["name"] +
+                " — my musical sign from " + str(stats["n_years"]) + " years of Spotify data. "
+                "Powered by MusicDNA. musicdna-dhalsimq.up.railway.app")
+
+    with tab2:
+        st.markdown("### All Musical Signs")
+        st.caption("Every archetype — which ones are close to you?")
+        all_signs = SIGNS + [DEFAULT_SIGN]
+        cols = st.columns(2)
+        for i, sign in enumerate(all_signs):
+            is_yours = sign["name"] == matched_sign["name"]
+            border   = "#A78BFA" if is_yours else "#1e1e1e"
+            badge    = " <span style='color:#A78BFA;font-size:.7em;background:#7C3AED22;padding:2px 8px;border-radius:10px;'>← yours</span>" if is_yours else ""
+            with cols[i % 2]:
+                st.markdown(
+                    "<div style='background:#0f0f0f;border:1px solid " + border + ";"
+                    "border-left:3px solid " + border + ";border-radius:10px;"
+                    "padding:14px;margin-bottom:10px;'>"
+                    "<div style='font-size:1.4em;margin-bottom:4px;'>" + sign.get("emoji","🎵") + "</div>"
+                    "<div style='font-weight:800;color:#fff;font-size:.92em;'>" + sign["name"] + badge + "</div>"
+                    "<div style='color:#555;font-size:.78em;margin-top:6px;line-height:1.5;'>"
+                    + sign["curse"][:120].split("{")[0] + "..."
+                    "</div></div>",
+                    unsafe_allow_html=True
+                )
