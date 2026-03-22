@@ -185,7 +185,7 @@ if (not st.session_state.data_loaded
 
 PAGES_BASE = [
     "Overview", "Musical Horoscope", "Likes Autopsy", "Playlist Autopsy",
-    "Discovery", "Hall of Shame", "Parent Mode", "Celebrity Twin",
+    "Discovery", "Forgotten", "Hall of Shame", "Parent Mode", "Celebrity Twin",
     "Artists and Tracks", "Time Patterns",
 ]
 PAGES_FULL_DNA = ["Taste Drift", "Audio Profile"]
@@ -228,6 +228,18 @@ with st.sidebar:
                 "</div></div>",
                 unsafe_allow_html=True
             )
+
+        st.markdown(
+            "<a href='https://www.spotify.com/account/privacy' target='_blank' "
+            "style='display:block;background:#0f0f0f;border:1px solid #1DB95444;"
+            "border-radius:8px;padding:10px 14px;margin-bottom:14px;"
+            "text-decoration:none;color:#1DB954;font-size:.8em;font-weight:700;'>"
+            "↗ Download your Spotify data"
+            "<div style='color:#555;font-weight:400;font-size:.85em;margin-top:2px;'>"
+            "spotify.com/account/privacy — request Extended streaming history"
+            "</div></a>",
+            unsafe_allow_html=True
+        )
 
         st.markdown("**Step 1 — Extended History**")
         st.caption("Your full 12-year analysis.")
@@ -331,6 +343,7 @@ elif "Musical Horoscope" in page: import horoscope;        horoscope.render(dfm,
 elif "Likes Autopsy"     in page: import likes_autopsy;    likes_autopsy.render(dfm, lib)
 elif "Playlist Autopsy"  in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
 elif "Discovery"         in page: import discovery;        discovery.render(dfm)
+elif "Forgotten"         in page: import forgotten;        forgotten.render(dfm)
 elif "Hall of Shame"     in page: import hall_of_shame;    hall_of_shame.render(dfm, lib, playlists)
 elif "Parent Mode"       in page: import parent_mode;      parent_mode.render(dfm, dfd, [])
 elif "Celebrity Twin"    in page: import celebrity_twin;   celebrity_twin.render(dfm)
