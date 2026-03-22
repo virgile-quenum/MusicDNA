@@ -15,7 +15,6 @@ GENRE_COLORS = [
     "#34d399", "#f472b6", "#fb923c", "#a3e635", "#38bdf8",
 ]
 
-@st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_artist_genres(artist_names_tuple):
     artist_names = list(artist_names_tuple)
     """Search Spotify for each artist name and return their genres."""
