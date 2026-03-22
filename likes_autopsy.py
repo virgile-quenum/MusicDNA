@@ -145,13 +145,14 @@ def render(dfm, lib):
                     orientation="h",
                     marker_color="#9B59B6",
                     text=admired_plot["label"],
-                    textposition="outside",
+                    textposition="inside",
+                    insidetextanchor="start",
                 ))
                 fig.update_layout(
                     plot_bgcolor="#111", paper_bgcolor="#111", font_color="#aaa",
                     yaxis=dict(autorange="reversed", tickfont=dict(size=11, color="#ccc")),
-                    xaxis=dict(gridcolor="#1a1a1a", title="% of saved tracks actually played", range=[0, 120]),
-                    margin=dict(l=150, r=120, t=10, b=20),
+                    xaxis=dict(gridcolor="#1a1a1a", title="% of saved tracks actually played", range=[0, 130]),
+                    margin=dict(l=150, r=20, t=10, b=20),
                     height=max(300, len(admired_plot) * 28)
                 )
                 st.plotly_chart(fig, use_container_width=True)
@@ -165,8 +166,8 @@ def render(dfm, lib):
                 # show plays + % of their catalogue in library
                 visceral_plot = visceral.copy()
                 visceral_plot["label"] = [
-                    str(p) + " plays / " + str(lc) + " saved"
-                    for p, lc in zip(visceral_plot["plays"], visceral_plot["liked_count"])
+                    str(p) + " plays — never saved"
+                    for p in visceral_plot["plays"]
                 ]
                 fig2 = go.Figure(go.Bar(
                     x=visceral_plot["plays"],
@@ -179,8 +180,8 @@ def render(dfm, lib):
                 fig2.update_layout(
                     plot_bgcolor="#111", paper_bgcolor="#111", font_color="#aaa",
                     yaxis=dict(autorange="reversed", tickfont=dict(size=11, color="#ccc")),
-                    xaxis=dict(gridcolor="#1a1a1a", title="Total plays"),
-                    margin=dict(l=150, r=120, t=10, b=20),
+                    xaxis=dict(gridcolor="#1a1a1a", title="Total plays", range=[0, visceral_plot["plays"].max() * 1.5]),
+                    margin=dict(l=150, r=20, t=10, b=20),
                     height=max(300, len(visceral_plot) * 28)
                 )
                 st.plotly_chart(fig2, use_container_width=True)
