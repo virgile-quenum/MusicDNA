@@ -71,11 +71,17 @@ def render(dfm, dfd, all_records):
         unsafe_allow_html=True
     )
 
-    first_date = first_kids['ts']
-    now        = pd.Timestamp(datetime.now())
-    age_years  = (now - first_date).days / 365.25
-    age_est    = int(age_years)
-    age_range  = str(age_est) + "–" + str(age_est + 1) + " years old"
+    # Use first month with >5% kids score — more reliable than first isolated play
+    significant = parent_score[parent_score['pct'] >= 5]
+    if not significant.empty:
+        first_significant_ym = significant.iloc[0]['ym']
+        first_date = pd.Timestamp(first_significant_ym + "-01")
+    else:
+        first_date = first_kids['ts']
+    now       = pd.Timestamp(datetime.now())
+    age_years = (now - first_date).days / 365.25
+    age_est   = int(age_years)
+    age_range = str(age_est) + "–" + str(age_est + 1) + " years old"
 
     cultures = detect_child_cultures(dfd)
     dominant_culture  = list(cultures.keys())[0]   if cultures else "Unknown"
