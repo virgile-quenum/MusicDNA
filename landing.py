@@ -1,6 +1,6 @@
 import streamlit as st
 
-def render(get_auth_url_fn):
+def render(get_auth_url_fn, data_loaded=False):
     auth_url = get_auth_url_fn()
 
     st.markdown(
@@ -9,18 +9,30 @@ def render(get_auth_url_fn):
         "<h1 style='font-size:3em;font-weight:900;margin:8px 0 4px;'>"
         "Music<span style='color:#A78BFA;'>DNA</span></h1>"
         "<p style='color:#555;font-size:.9em;margin:0 0 12px;'>powered by DhalsimStream</p>"
-        "<p style='color:#888;font-size:1.05em;line-height:1.8;max-width:520px;margin:0 auto 28px;'>"
+        "<p style='color:#888;font-size:1.05em;line-height:1.8;max-width:520px;margin:0 auto 32px;'>"
         "Spotify Wrapped tells you what you listened to.<br>"
         "<b style='color:#fff;'>MusicDNA tells you who you are.</b>"
         "</p>"
         "<a href='" + auth_url + "' target='_top' "
         "style='background:#1DB954;color:#000;font-weight:800;"
-        "padding:14px 36px;border-radius:30px;text-decoration:none;"
-        "font-size:1em;display:inline-block;margin-bottom:10px;'>"
-        "Connect Spotify — instant access</a>"
+        "padding:14px 40px;border-radius:30px;text-decoration:none;"
+        "font-size:1em;display:inline-block;margin-bottom:12px;'>"
+        "Connect Spotify — start here</a>"
+        "<br>"
+        "<span style='color:#333;font-size:.8em;'>"
+        "No Spotify account? "
+        "<span style='color:#555;'>Upload your export files directly in the sidebar.</span>"
+        "</span>"
         "</div>",
         unsafe_allow_html=True
     )
+
+    if data_loaded:
+        st.warning(
+            "Connecting Spotify will reload the page — "
+            "your uploaded files will need to be re-uploaded. "
+            "We recommend connecting Spotify first, then uploading your files."
+        )
 
     st.markdown("---")
 
@@ -35,9 +47,9 @@ def render(get_auth_url_fn):
     c1, c2, c3, c4 = st.columns(4)
     shocks = [
         (c1, "45%",     "of liked tracks are never played",       "You collect music like books you'll never read."),
-        (c2, "1,343h",  "of one user's account was his daughters", "Spotify saw he became a parent before he posted it anywhere."),
-        (c3, "2017-18", "peak listening years for most users",     "Life was different then. The data agrees."),
-        (c4, "17%",     "average skip rate",                       "Lower than you think. You are more committed than you admit."),
+        (c2, "1,343h",  "of one user's account was his child's",  "Spotify saw he became a parent before he posted it anywhere."),
+        (c3, "2017-18", "peak listening years for most users",    "Life was different then. The data agrees."),
+        (c4, "17%",     "average skip rate",                      "Lower than you think. You are more committed than you admit."),
     ]
     for col, val, lbl, sub in shocks:
         with col:
@@ -59,17 +71,16 @@ def render(get_auth_url_fn):
     )
 
     features = [
-        ("🏠", "Musical Profile",   "12 years of listening history. Your eras, your evolution, your numbers."),
-        ("🎤", "Artists and Tracks","Your all-time top artists and tracks with yearly breakdowns."),
-        ("🕐", "Time Patterns",     "When you listen. Hour by hour, day by day. Your listening heatmap."),
-        ("👶", "Parent Mode",       "How parenthood rewrote your Spotify. Detected automatically."),
-        ("💔", "Likes Autopsy",     "45% of liked tracks never played. Who you think you are vs. reality."),
-        ("📋", "Playlist Autopsy",  "Active playlists vs archives. Plus merge candidates."),
-        ("😳", "Hall of Shame",     "Your most-played tracks judged. Sarcastically. Without mercy."),
-        ("⭐", "Celebrity Twin",    "Which public figures share your exact musical taste."),
-        ("🔮", "Musical Horoscope", "Your sign, your curse, your gift, your prediction. From real data."),
+        ("🏠", "Musical Profile",    "12 years of listening history. Your eras, your evolution, your numbers."),
+        ("🎤", "Artists and Tracks", "Your all-time top artists and tracks with yearly breakdowns."),
+        ("🕐", "Time Patterns",      "When you listen. Hour by hour, day by day. Your listening heatmap."),
+        ("👶", "Parent Mode",        "How parenthood rewrote your Spotify. Detected automatically."),
+        ("💔", "Likes Autopsy",      "45% of liked tracks never played. Who you think you are vs. reality."),
+        ("📋", "Playlist Autopsy",   "Active playlists vs archives. Plus merge candidates."),
+        ("😳", "Hall of Shame",      "Tracks you play constantly — never liked, never saved. Without mercy."),
+        ("⭐", "Celebrity Twin",     "Which public figures share your exact musical taste."),
+        ("🔮", "Musical Horoscope",  "Your sign, your curse, your gift, your prediction. From real data."),
     ]
-
     cols = st.columns(3)
     for i, (icon, title, desc) in enumerate(features):
         with cols[i % 3]:
@@ -95,7 +106,7 @@ def render(get_auth_url_fn):
         "Spotify knows when you became a parent.</div>"
         "<div style='color:#888;font-size:.88em;line-height:1.8;'>"
         "One month your listening is yours. The next it shifts — lullabies, nursery rhymes, "
-        "children songs on loop at 3am. MusicDNA detects this automatically and shows you "
+        "children's songs on loop at 3am. MusicDNA detects this automatically and shows you "
         "the exact month it happened.<br><br>"
         "<b style='color:#ccc;'>You posted the birth announcement. "
         "Spotify had already figured it out weeks earlier.</b>"
@@ -105,12 +116,29 @@ def render(get_auth_url_fn):
     )
 
     st.markdown(
-        "<div style='text-align:center;padding:28px 0 12px;'>"
+        "<div style='background:#0f0f0f;border:1px solid #A78BFA33;"
+        "border-radius:12px;padding:20px;margin-bottom:20px;'>"
+        "<div style='color:#A78BFA;font-weight:700;font-size:.82em;"
+        "text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;'>"
+        "How to get your full 12-year history</div>"
+        "<div style='color:#888;font-size:.83em;line-height:2.2;'>"
+        "1. Connect Spotify above — instant access to your recent data<br>"
+        "2. Go to <b style='color:#fff;'>spotify.com/account/privacy</b><br>"
+        "3. Request <b style='color:#fff;'>Extended streaming history</b><br>"
+        "4. Wait up to 30 days for the email<br>"
+        "5. Upload the zip in the sidebar — unlocks all 9 analyses"
+        "</div>"
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        "<div style='text-align:center;padding:20px 0 12px;'>"
         "<a href='" + auth_url + "' target='_top' "
         "style='background:#7C3AED;color:#fff;font-weight:800;"
         "padding:14px 36px;border-radius:30px;text-decoration:none;"
         "font-size:1em;display:inline-block;'>"
-        "Start now — free, no account needed</a>"
+        "Connect Spotify — free, no account needed</a>"
         "</div>",
         unsafe_allow_html=True
     )
