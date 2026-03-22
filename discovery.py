@@ -28,7 +28,6 @@ def _popularity_label(pop):
     if pop < 55:  return "Emerging",    AMBER
     return "Mainstream", "#888"
 
-@st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_top_genres(tr_key):
     """Get top genres from top artists via Spotify API."""
     data = api_get("me/top/artists", {"time_range": tr_key, "limit": 20})
