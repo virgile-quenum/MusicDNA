@@ -107,20 +107,13 @@ def read_zip(uploaded):
     return records, lib, playlists, mode
 
 PAGES_BASE = [
-    "Overview",
-    "Musical Horoscope",
-    "Likes Autopsy",
-    "Playlist Autopsy",
-    "Discovery",
-    "Hall of Shame",
-    "Parent Mode",
-    "Celebrity Twin",
-    "Artists and Tracks",
-    "Time Patterns",
+    "Overview", "Musical Horoscope", "Likes Autopsy", "Playlist Autopsy",
+    "Discovery", "Hall of Shame", "Parent Mode", "Celebrity Twin",
+    "Artists and Tracks", "Time Patterns",
 ]
 PAGES_FULL_DNA = ["Taste Drift", "Audio Profile"]
 
-# ── SIDEBAR — always fully rendered before any st.stop() ─────────────────────
+# ── SIDEBAR ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
     st.markdown(
@@ -132,20 +125,24 @@ with st.sidebar:
     )
     st.markdown("---")
 
-    # Spotify
     if is_authenticated():
         st.success("✓ Spotify connected")
         if st.button("Disconnect", use_container_width=True):
             del st.session_state['spotify_token']
             st.rerun()
     else:
+        # warn if files are loaded — connecting will wipe session
+        if st.session_state.data_loaded:
+            st.warning(
+                "Connecting Spotify will reload the page and your files will need "
+                "to be re-uploaded. Connect Spotify first next time."
+            )
         render_connect_button("Connect Spotify")
-        st.caption("Enables Discovery and recommendations")
+        st.caption("Connect first — then upload your files to keep your session.")
 
     st.markdown("---")
 
     if not st.session_state.data_loaded:
-        # upsell banner if spotify connected
         if is_authenticated():
             st.markdown(
                 "<div style='background:#0f0f0f;border:1px solid #7C3AED44;"
@@ -188,13 +185,11 @@ with st.sidebar:
                     else:
                         st.error("No music data found.")
 
-        # Spotify-only nav (no file loaded)
         if is_authenticated():
             st.markdown("---")
             st.session_state['_page'] = "spotify_mode"
 
     else:
-        # file loaded — clean sidebar
         dfm_  = st.session_state.dfm
         mode_ = st.session_state.mode
         lib_  = st.session_state.lib
@@ -242,19 +237,16 @@ with st.sidebar:
 
 page = st.session_state.get('_page', 'Overview')
 
-# Case 1: no file, not authenticated → landing
 if not st.session_state.data_loaded and not is_authenticated():
     import landing
-    landing.render(get_auth_url)
+    landing.render(get_auth_url, data_loaded=False)
     st.stop()
 
-# Case 2: no file, Spotify connected → spotify_mode
 if not st.session_state.data_loaded and is_authenticated():
     import spotify_mode
     spotify_mode.render()
     st.stop()
 
-# Case 3: file loaded → full app (Spotify connected or not)
 if not st.session_state.data_loaded:
     st.stop()
 
