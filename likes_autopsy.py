@@ -93,12 +93,15 @@ def render(dfm, lib):
     )
     total_liked = len(liked)
 
+    n_admired  = len(merged[(merged["liked_count"] >= 3) & (merged["plays"] < 15)])
+    n_visceral = len(merged[(merged["liked_count"] == 0) & (merged["plays"] >= 20)])
+
     c1, c2, c3, c4 = st.columns(4)
     for col, val, lbl in [
         (c1, str(total_liked), "Tracks liked"),
         (c2, str(never_played) + " (" + str(int(never_played / max(total_liked, 1) * 100)) + "%)", "Never played"),
-        (c3, str(len(merged[merged["profile"] == "Admired"])),  "Saved but barely played"),
-        (c4, str(len(merged[merged["profile"] == "Visceral"])), "Played but never saved"),
+        (c3, str(n_admired),   "Saved but barely played"),
+        (c4, str(n_visceral),  "Played but never saved"),
     ]:
         with col:
             st.markdown(
@@ -119,12 +122,12 @@ def render(dfm, lib):
         col1, col2 = st.columns(2)
 
         admired = (
-            merged[(merged["liked_count"] >= 5) & (merged["plays"] < 10)]
+            merged[(merged["liked_count"] >= 3) & (merged["plays"] < 15)]
             .sort_values("_confidence", ascending=False).head(30)
         )
         visceral = (
-            merged[(merged["liked_count"] <= 1) & (merged["plays"] >= PLAY_THRESHOLD)]
-            .sort_values("_confidence", ascending=False).head(30)
+            merged[(merged["liked_count"] == 0) & (merged["plays"] >= 20)]
+            .sort_values("plays", ascending=False).head(30)
         )
 
         with col1:
