@@ -31,7 +31,8 @@ st.markdown(CSS, unsafe_allow_html=True)
 handle_callback()
 
 for k, v in [('data_loaded', False), ('dfm', None), ('dfd', None),
-              ('lib', {}), ('playlists', []), ('mode', None), ('_page', 'Overview')]:
+              ('lib', {}), ('playlists', []), ('mode', None),
+              ('_page', 'Overview'), ('kids_on', False)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -97,21 +98,13 @@ def read_zip(uploaded):
                     if rec: records.append(rec)
         if lf:
             raw_lib = json.loads(z.read(lf))
-            # handle both dict and list formats
-            if isinstance(raw_lib, dict):
-                lib = raw_lib
-            elif isinstance(raw_lib, list):
-                lib = {'tracks': raw_lib}
-            else:
-                lib = {}
+            lib = raw_lib if isinstance(raw_lib, dict) else {'tracks': raw_lib} if isinstance(raw_lib, list) else {}
         for pf in pfs:
             try:
                 playlists.extend(json.loads(z.read(pf)).get('playlists', []))
             except:
                 pass
     return records, lib, playlists, mode
-
-# ── sidebar ───────────────────────────────────────────────────────────────────
 
 PAGES_BASE = [
     "Overview",
@@ -125,10 +118,9 @@ PAGES_BASE = [
     "Artists and Tracks",
     "Time Patterns",
 ]
-PAGES_FULL_DNA = [
-    "Taste Drift",
-    "Audio Profile",
-]
+PAGES_FULL_DNA = ["Taste Drift", "Audio Profile"]
+
+# ── SIDEBAR — always fully rendered before any st.stop() ─────────────────────
 
 with st.sidebar:
     st.markdown(
@@ -140,7 +132,7 @@ with st.sidebar:
     )
     st.markdown("---")
 
-    # Spotify connect / status
+    # Spotify
     if is_authenticated():
         st.success("✓ Spotify connected")
         if st.button("Disconnect", use_container_width=True):
@@ -153,7 +145,7 @@ with st.sidebar:
     st.markdown("---")
 
     if not st.session_state.data_loaded:
-        # upsell if spotify connected but no file
+        # upsell banner if spotify connected
         if is_authenticated():
             st.markdown(
                 "<div style='background:#0f0f0f;border:1px solid #7C3AED44;"
@@ -161,21 +153,21 @@ with st.sidebar:
                 "<div style='color:#A78BFA;font-size:.78em;font-weight:700;margin-bottom:4px;'>"
                 "Unlock Full DNA</div>"
                 "<div style='color:#555;font-size:.76em;line-height:1.6;'>"
-                "Upload your Extended History zip to add 9 deep analyses + "
-                "Taste Drift + Audio Profile evolution."
-                "</div>"
-                "</div>",
+                "Upload your Extended History zip to add 9 deep analyses, "
+                "Taste Drift and Audio Profile."
+                "</div></div>",
                 unsafe_allow_html=True
             )
 
         st.markdown("**Step 1 — Extended History**")
-        st.caption("Your full 12-year analysis. The big zip.")
+        st.caption("Your full 12-year analysis.")
         zip1 = st.file_uploader("Extended history zip", type="zip",
                                  key="zip1", label_visibility="collapsed")
         st.markdown("**Step 2 — Standard Export**")
         st.caption("Unlocks Likes Autopsy and Playlist Autopsy.")
         zip2 = st.file_uploader("Standard export zip", type="zip",
                                  key="zip2", label_visibility="collapsed")
+
         if zip1:
             if st.button("Analyse", use_container_width=True, type="primary"):
                 with st.spinner("Loading your history..."):
@@ -196,50 +188,38 @@ with st.sidebar:
                     else:
                         st.error("No music data found.")
 
-        # navigation in Spotify mode (no file loaded)
+        # Spotify-only nav (no file loaded)
         if is_authenticated():
             st.markdown("---")
-            st.markdown(
-                "<div style='color:#555;font-size:.75em;margin-bottom:8px;'>"
-                "Spotify snapshot navigation</div>",
-                unsafe_allow_html=True
-            )
-            st.session_state['_page'] = st.radio(
-                "", ["Your Music Right Now"],
-                label_visibility="collapsed"
-            )
+            st.session_state['_page'] = "spotify_mode"
 
     else:
         # file loaded — clean sidebar
-        dfm  = st.session_state.dfm
-        mode = st.session_state.mode
-        lib  = st.session_state.lib
+        dfm_  = st.session_state.dfm
+        mode_ = st.session_state.mode
+        lib_  = st.session_state.lib
 
-        if mode == 'extended':
-            yr_min = int(dfm['year'].min())
-            yr_max = int(dfm['year'].max())
-            st.success("Extended (" + str(yr_min) + "–" + str(yr_max) + ")")
+        if mode_ == 'extended':
+            st.success("Extended (" + str(int(dfm_['year'].min())) + "–" + str(int(dfm_['year'].max())) + ")")
         else:
             st.warning("Standard export (12 months only)")
 
-        has_likes     = bool(lib.get('tracks')) if isinstance(lib, dict) else False
+        has_likes     = bool(lib_.get('tracks')) if isinstance(lib_, dict) else bool(lib_)
         has_playlists = bool(st.session_state.playlists)
-
         if not has_likes:
-            st.warning("No likes — upload standard zip for Likes Autopsy")
+            st.warning("No likes — upload standard zip")
         if not has_playlists:
-            st.warning("No playlists — upload standard zip for Playlist Autopsy")
+            st.warning("No playlists — upload standard zip")
 
         st.markdown("---")
         if st.button("Load new file", use_container_width=True):
-            for k in ['data_loaded', 'dfm', 'dfd', 'lib', 'playlists', 'mode']:
-                st.session_state[k] = False if k == 'data_loaded' else ({} if k == 'lib' else ([] if k == 'playlists' else None))
+            for k in ['data_loaded','dfm','dfd','lib','playlists','mode']:
+                st.session_state[k] = False if k=='data_loaded' else ({} if k=='lib' else ([] if k=='playlists' else None))
             st.rerun()
 
         st.markdown("---")
 
         nav_pages = PAGES_BASE.copy()
-
         if is_authenticated():
             st.markdown(
                 "<div style='color:#1DB954;font-size:.72em;font-weight:700;"
@@ -249,31 +229,32 @@ with st.sidebar:
             )
             nav_pages += PAGES_FULL_DNA
 
-        st.session_state['_page'] = st.radio(
-            "", nav_pages, label_visibility="collapsed"
-        )
+        st.session_state['_page'] = st.radio("", nav_pages, label_visibility="collapsed")
 
         kids_on = st.toggle("Include children's content", value=False)
         st.session_state['kids_on'] = kids_on
         st.caption(
-            "Your music: " + str(len(dfm)) + " plays · "
-            + str(round(dfm['ms'].sum() / 3600000)) + "h"
+            "Your music: " + str(len(dfm_)) + " plays · "
+            + str(round(dfm_['ms'].sum() / 3600000)) + "h"
         )
 
-# ── routing ───────────────────────────────────────────────────────────────────
+# ── ROUTING ───────────────────────────────────────────────────────────────────
 
-# Case 1: nothing — landing
+page = st.session_state.get('_page', 'Overview')
+
+# Case 1: no file, not authenticated → landing
 if not st.session_state.data_loaded and not is_authenticated():
     import landing
     landing.render(get_auth_url)
     st.stop()
 
-# Case 2: Spotify only — spotify_mode
+# Case 2: no file, Spotify connected → spotify_mode
 if not st.session_state.data_loaded and is_authenticated():
     import spotify_mode
     spotify_mode.render()
     st.stop()
 
+# Case 3: file loaded → full app (Spotify connected or not)
 if not st.session_state.data_loaded:
     st.stop()
 
@@ -283,14 +264,13 @@ lib       = st.session_state.lib
 playlists = st.session_state.playlists
 kids_on   = st.session_state.get('kids_on', False)
 df        = pd.concat([dfm, dfd]) if (kids_on and dfd is not None and not dfd.empty) else dfm
-page      = st.session_state.get('_page', 'Overview')
 
 if   "Overview"          in page: import overview;         overview.render(dfm, dfd, kids_on)
 elif "Musical Horoscope" in page: import horoscope;        horoscope.render(dfm, dfd)
 elif "Likes Autopsy"     in page: import likes_autopsy;    likes_autopsy.render(dfm, lib)
 elif "Playlist Autopsy"  in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
 elif "Discovery"         in page: import discovery;        discovery.render(dfm)
-elif "Hall of Shame"     in page: import hall_of_shame;    hall_of_shame.render(dfm, lib)
+elif "Hall of Shame"     in page: import hall_of_shame;    hall_of_shame.render(dfm, lib, playlists)
 elif "Parent Mode"       in page: import parent_mode;      parent_mode.render(dfm, dfd, [])
 elif "Celebrity Twin"    in page: import celebrity_twin;   celebrity_twin.render(dfm)
 elif "Artists and Tracks"in page: import artists;          artists.render(df)
