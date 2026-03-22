@@ -32,6 +32,7 @@ def _history_top_artists(dfm, n=20):
     )
 
 def _popularity_label(pop):
+    if pop <= 0:   return None, None
     if pop < 30:  return "Underground", GREEN
     if pop < 55:  return "Emerging",    AMBER
     return "Mainstream", "#888"
@@ -110,9 +111,12 @@ def render(dfm):
                 "<span style='color:#fff;font-weight:700;font-size:.9em;'>" + name + "</span>"
                 + badge +
                 "</div>"
-                "<span style='color:" + pc + ";font-size:.72em;font-weight:700;"
-                "background:" + pc + "22;padding:2px 7px;border-radius:8px;'>"
-                + pl + "</span>"
+                + (
+                    "<span style='color:" + (pc or "") + ";font-size:.72em;font-weight:700;"
+                    "background:" + (pc or "") + "22;padding:2px 7px;border-radius:8px;'>"
+                    + (pl or "") + "</span>"
+                    if pl else ""
+                ) +
                 "</div>",
                 border=border
             )
