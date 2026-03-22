@@ -286,8 +286,8 @@ def render():
               "All time": "long_term"}
     tr_key = tr_map[time_range]
 
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["Top Tracks", "Top Artists", "Recently Played", "Audio Profile"]
+    tab1, tab2, tab3 = st.tabs(
+        ["Top Tracks", "Top Artists", "Recently Played"]
     )
 
     # fetch once, share across tabs
@@ -302,15 +302,6 @@ def render():
     with tab3:
         st.markdown("### Last 50 Plays")
         _render_recently_played()
-
-    with tab4:
-        st.markdown("### Audio Profile")
-        st.caption("Built from the audio features of your top 20 tracks.")
-        _render_audio_profile(
-            top_tracks if top_tracks else [],
-            all_genres if all_genres else [],
-            tr_key
-        )
 
     st.markdown("---")
     st.markdown(
