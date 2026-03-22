@@ -72,13 +72,13 @@ def _search_artists_by_genre(genre, known_names_tuple, known_history_tuple, limi
     return results
 
 def render(dfm=None):
-    st.title("Discovery")
-    st.markdown("*Artists you should know - matched to your DNA.*")
+    st.title("Explore")
+    st.markdown("*New artists to discover. Hidden gems in your history. Where Spotify's model disagrees with yours.*")
 
     authenticated = is_authenticated()
     known_history = set(dfm["artistName"].str.lower()) if dfm is not None else set()
 
-    tab1, tab2 = st.tabs(["New Discoveries", "Hidden Gems from Your History"])
+    tab1, tab2, tab3 = st.tabs(["New Discoveries", "Hidden Gems", "Two Versions of You"])
 
     # ── Tab 1: genre-based discovery ─────────────────────────────────────────
     with tab1:
@@ -249,3 +249,13 @@ def render(dfm=None):
                             )
                 else:
                     st.info("No high-skip artists found.")
+
+    # ── Tab 3: Two Versions of You (Taste Drift) ──────────────────────────────
+    with tab3:
+        if not authenticated:
+            st.warning("Connect Spotify to enable this analysis.")
+        elif dfm is None or dfm.empty:
+            st.warning("Upload your Extended History zip to enable this analysis.")
+        else:
+            import taste_drift
+            taste_drift.render(dfm)
