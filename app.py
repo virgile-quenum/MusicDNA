@@ -32,7 +32,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 handle_callback()
 
 for k, v in [('data_loaded', False), ('dfm', None), ('dfd', None),
-              ('lib', {}), ('playlists', []), ('mode', None),
+              ('lib', {}), ('playlists', []), ('mode', None), ('dfp', None),
               ('_page', 'Overview'), ('kids_on', False),
               ('_cache_key', None)]:
     if k not in st.session_state:
@@ -96,6 +96,20 @@ def parse_std(r):
         'reason_end': '', 'shuffle': False, 'track_uri': '', 'platform': '',
     }
 
+def parse_podcast(r):
+    """Parse a podcast episode record from extended history."""
+    uri = str(r.get('spotify_episode_uri', '') or r.get('spotify_track_uri', ''))
+    if not uri.startswith('spotify:episode:'):
+        return None
+    if r.get('ms_played', 0) < 10000:
+        return None
+    return {
+        'ts':      r['ts'],
+        'show':    r.get('master_metadata_album_album_name') or r.get('episode_show_name') or 'Unknown Show',
+        'episode': r.get('master_metadata_track_name') or r.get('episode_name') or 'Unknown Episode',
+        'ms':      r['ms_played'],
+    }
+
 def make_df(records):
     if not records:
         return pd.DataFrame()
@@ -108,8 +122,20 @@ def make_df(records):
     df['ym']    = df['ts'].dt.to_period('M').astype(str)
     return df
 
+def make_podcast_df(records):
+    if not records:
+        return pd.DataFrame()
+    df = pd.DataFrame(records)
+    df['ts']    = pd.to_datetime(df['ts'], utc=True, errors='coerce').dt.tz_localize(None)
+    df['year']  = df['ts'].dt.year
+    df['hour']  = df['ts'].dt.hour
+    df['dow']   = df['ts'].dt.dayofweek
+    df['ym']    = df['ts'].dt.to_period('M').astype(str)
+    return df
+
 def _parse_single_zip(data):
     records, lib, playlists, mode = [], {}, [], None
+    podcasts_raw = []
     with zipfile.ZipFile(io.BytesIO(data)) as z:
         names = z.namelist()
         ext = [n for n in names if 'Streaming_History_Audio_' in n and n.endswith('.json')]
@@ -121,7 +147,11 @@ def _parse_single_zip(data):
             for fn in ext:
                 for r in json.loads(z.read(fn)):
                     rec = parse_ext(r)
-                    if rec: records.append(rec)
+                    if rec:
+                        records.append(rec)
+                    else:
+                        pod = parse_podcast(r)
+                        if pod: podcasts_raw.append(pod)
         elif std:
             mode = 'standard'
             for fn in std:
@@ -136,21 +166,23 @@ def _parse_single_zip(data):
                 playlists.extend(json.loads(z.read(pf)).get('playlists', []))
             except:
                 pass
-    return records, lib, playlists, mode
+    return records, lib, playlists, mode, podcasts_raw
 
 def _parse_zips(zip1_bytes, zip2_bytes):
     """Full parse — called by cache_data."""
-    records, lib, playlists, mode = _parse_single_zip(zip1_bytes)
+    records, lib, playlists, mode, podcasts_raw = _parse_single_zip(zip1_bytes)
     if zip2_bytes:
-        _, lib2, pl2, _ = _parse_single_zip(zip2_bytes)
+        _, lib2, pl2, _, pod2 = _parse_single_zip(zip2_bytes)
         if lib2: lib = lib2
         if pl2:  playlists = pl2
+        podcasts_raw.extend(pod2)
     if not records:
         return None
     my_r, dau_r = split(records)
     return {
         'dfm':       make_df(my_r),
         'dfd':       make_df(dau_r),
+        'dfp':       make_podcast_df(podcasts_raw),
         'lib':       lib,
         'playlists': playlists,
         'mode':      mode,
@@ -161,6 +193,7 @@ def _load_into_session(parsed):
         return False
     st.session_state.dfm       = parsed['dfm']
     st.session_state.dfd       = parsed['dfd']
+    st.session_state.dfp       = parsed.get('dfp', pd.DataFrame())
     st.session_state.lib       = parsed['lib']
     st.session_state.playlists = parsed['playlists']
     st.session_state.mode      = parsed['mode']
@@ -186,7 +219,7 @@ if (not st.session_state.data_loaded
 PAGES_BASE = [
     "Overview", "Musical Horoscope", "Likes Autopsy", "Playlist Autopsy",
     "Discovery", "Forgotten", "Hall of Shame", "Parent Mode", "Celebrity Twin",
-    "Artists and Tracks", "Time Patterns",
+    "Artists and Tracks", "Time Patterns", "Podcast Autopsy",
 ]
 PAGES_FULL_DNA = ["Taste Drift", "Audio Profile"]
 
@@ -335,11 +368,12 @@ dfm       = st.session_state.dfm
 dfd       = st.session_state.dfd
 lib       = st.session_state.lib
 playlists = st.session_state.playlists
+dfp       = st.session_state.get('dfp', pd.DataFrame())
 kids_on   = st.session_state.get('kids_on', False)
 df        = pd.concat([dfm, dfd]) if (kids_on and dfd is not None and not dfd.empty) else dfm
 
 if   "Overview"          in page: import overview;         overview.render(dfm, dfd, kids_on)
-elif "Musical Horoscope" in page: import horoscope;        horoscope.render(dfm, dfd)
+elif "Musical Horoscope" in page: import horoscope;        horoscope.render(dfm, dfd, lib)
 elif "Likes Autopsy"     in page: import likes_autopsy;    likes_autopsy.render(dfm, lib)
 elif "Playlist Autopsy"  in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
 elif "Discovery"         in page: import discovery;        discovery.render(dfm)
@@ -349,5 +383,6 @@ elif "Parent Mode"       in page: import parent_mode;      parent_mode.render(df
 elif "Celebrity Twin"    in page: import celebrity_twin;   celebrity_twin.render(dfm)
 elif "Artists and Tracks"in page: import artists;          artists.render(df)
 elif "Time Patterns"     in page: import time_patterns;    time_patterns.render(df)
-elif "Taste Drift"       in page: import taste_drift;      taste_drift.render(dfm)
+elif "Podcast Autopsy"  in page: import podcast_autopsy;  podcast_autopsy.render(dfp)
+elif "Taste Drift"      in page: import taste_drift;      taste_drift.render(dfm)
 elif "Audio Profile"     in page: import audio_profile;    audio_profile.render(dfm)
