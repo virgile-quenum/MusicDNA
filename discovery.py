@@ -28,6 +28,7 @@ def _popularity_label(pop):
     if pop < 55:  return "Emerging",    AMBER
     return "Mainstream", "#888"
 
+@st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_top_genres(tr_key):
     """Get top genres from top artists via Spotify API."""
     data = api_get("me/top/artists", {"time_range": tr_key, "limit": 20})
@@ -41,7 +42,10 @@ def _fetch_top_genres(tr_key):
     top_genres = [g for g, _ in Counter(all_genres).most_common(6)]
     return top_genres, known_names
 
-def _search_artists_by_genre(genre, known_names, known_history, limit=8):
+@st.cache_data(ttl=3600, show_spinner=False)
+def _search_artists_by_genre(genre, known_names_tuple, known_history_tuple, limit=8):
+    known_names    = set(known_names_tuple)
+    known_history  = set(known_history_tuple)
     """Search Spotify for artists in a genre not already in user history."""
     data = api_get("search", {
         "q": "genre:" + genre,
@@ -116,7 +120,11 @@ def render(dfm=None):
                 all_discoveries = []
                 with st.spinner("Finding artists you have not heard yet..."):
                     for genre in top_genres[:4]:
-                        results = _search_artists_by_genre(genre, known_names, known_history)
+                        results = _search_artists_by_genre(
+                            genre,
+                            tuple(sorted(known_names)),
+                            tuple(sorted(known_history)),
+                        )
                         all_discoveries.extend(results)
 
                 # deduplicate by name
