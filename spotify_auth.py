@@ -46,7 +46,7 @@ def get_auth_url():
 def render_connect_button(label="Connect Spotify"):
     auth_url = get_auth_url()
     st.markdown(
-        "<a href='" + auth_url + "' target='_blank' "
+        "<a href='" + auth_url + "' target='_top' "
         "style='display:block;width:100%;background:#1DB954;color:#000;"
         "font-weight:800;text-align:center;padding:12px;border-radius:8px;"
         "text-decoration:none;font-size:.95em;margin-bottom:4px;'>"
@@ -69,10 +69,10 @@ def exchange_code(code):
     )
     if resp.status_code == 200:
         data = resp.json()
-        data['expires_at'] = (datetime.now() + timedelta(seconds=data['expires_in'])).isoformat()
+        data["expires_at"] = (datetime.now() + timedelta(seconds=data["expires_in"])).isoformat()
         return data
     else:
-        st.session_state['oauth_error'] = str(resp.status_code) + " " + resp.text
+        st.session_state["oauth_error"] = str(resp.status_code) + " " + resp.text
     return None
 
 def refresh_token(refresh_tok):
@@ -88,24 +88,24 @@ def refresh_token(refresh_tok):
     )
     if resp.status_code == 200:
         data = resp.json()
-        data['expires_at'] = (datetime.now() + timedelta(seconds=data['expires_in'])).isoformat()
-        data['refresh_token'] = refresh_tok
+        data["expires_at"] = (datetime.now() + timedelta(seconds=data["expires_in"])).isoformat()
+        data["refresh_token"] = refresh_tok
         return data
     return None
 
 def get_valid_token():
-    if 'spotify_token' not in st.session_state:
+    if "spotify_token" not in st.session_state:
         return None
     tok = st.session_state.spotify_token
     try:
-        expires_at = datetime.fromisoformat(tok['expires_at'])
+        expires_at = datetime.fromisoformat(tok["expires_at"])
         if datetime.now() >= expires_at - timedelta(minutes=5):
-            new_tok = refresh_token(tok.get('refresh_token'))
+            new_tok = refresh_token(tok.get("refresh_token"))
             if new_tok:
                 st.session_state.spotify_token = new_tok
-                return new_tok['access_token']
+                return new_tok["access_token"]
             return None
-        return tok['access_token']
+        return tok["access_token"]
     except Exception:
         return None
 
@@ -132,16 +132,16 @@ def handle_callback():
     try:
         all_params = dict(st.query_params)
         if all_params:
-            st.session_state['last_params'] = all_params
-        if 'code' in all_params and 'spotify_token' not in st.session_state:
-            code = all_params['code']
+            st.session_state["last_params"] = all_params
+        if "code" in all_params and "spotify_token" not in st.session_state:
+            code = all_params["code"]
             token_data = exchange_code(code)
             if token_data:
                 st.session_state.spotify_token = token_data
                 st.query_params.clear()
                 st.rerun()
-        if 'error' in all_params:
-            st.session_state['oauth_error'] = all_params['error']
+        if "error" in all_params:
+            st.session_state["oauth_error"] = all_params["error"]
             st.query_params.clear()
     except Exception as e:
-        st.session_state['oauth_error'] = str(e)
+        st.session_state["oauth_error"] = str(e)
