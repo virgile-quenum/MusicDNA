@@ -32,8 +32,8 @@ def _pct_bars(pct_12m, pct_all):
     bar_12m = (
         "<div style='margin-top:8px;'>"
         "<div style='display:flex;justify-content:space-between;margin-bottom:2px;'>"
-        "<span style='font-size:.72em;color:#555;'>Played (12 months)</span>"
-        "<span style='font-size:.72em;font-weight:700;color:" + GREEN + ";'>" + str(pct_12m) + "%</span>"
+        "<span style='font-size:.72em;color:#555;'>Played last 12 months</span>"
+        "<span style='font-size:.72em;font-weight:700;color:" + GREEN + ";'>" + str(pct_12m) + "% of tracks</span>"
         "</div>"
         "<div style='background:#1e1e1e;border-radius:3px;height:5px;'>"
         "<div style='background:" + GREEN + ";width:" + str(min(pct_12m, 100)) + "%;height:5px;border-radius:3px;'></div>"
@@ -42,14 +42,23 @@ def _pct_bars(pct_12m, pct_all):
     bar_all = (
         "<div style='margin-top:6px;'>"
         "<div style='display:flex;justify-content:space-between;margin-bottom:2px;'>"
-        "<span style='font-size:.72em;color:#444;'>Played (all-time)</span>"
-        "<span style='font-size:.72em;color:#555;'>" + str(pct_all) + "%</span>"
+        "<span style='font-size:.72em;color:#444;'>Played all-time</span>"
+        "<span style='font-size:.72em;color:#555;'>" + str(pct_all) + "% of tracks</span>"
         "</div>"
         "<div style='background:#1a1a1a;border-radius:3px;height:3px;'>"
         "<div style='background:#555;width:" + str(min(pct_all, 100)) + "%;height:3px;border-radius:3px;'></div>"
         "</div></div>"
     )
     return bar_12m + bar_all
+
+def _status_label(status):
+    labels = {
+        "Active":  ("In rotation",  GREEN),
+        "Dormant": ("On pause",     AMBER),
+        "Archive": ("Forgotten",    "#555"),
+        "Ghost":   ("Never used",   RED),
+    }
+    return labels.get(status, (status, "#555"))
 
 def _jaccard(set_a, set_b):
     if not set_a or not set_b:
@@ -114,13 +123,13 @@ def _build_playlist_stats(playlists, dfm):
 
 def render(dfm, playlists):
     st.title("Playlist Autopsy")
-    st.markdown("*Which playlists you actually use vs. archives you built and forgot.*")
+    st.markdown("*Which playlists you actually use vs. ones you built and forgot.*")
     st.markdown(
         "<div style='background:#0f0f0f;border:1px solid #1e1e1e;border-radius:8px;"
         "padding:10px 14px;margin-bottom:16px;color:#555;font-size:.8em;'>"
         "Play overlap is estimated from your listening history. "
         "Spotify does not record which playlist triggered a play, "
-        "so these percentages reflect whether a track exists in your history, "
+        "so these percentages reflect whether a track appears in your history, "
         "not whether you opened the playlist."
         "</div>",
         unsafe_allow_html=True
@@ -143,11 +152,11 @@ def render(dfm, playlists):
 
     c1, c2, c3, c4, c5 = st.columns(5)
     for col, val, lbl, color in [
-        (c1, total,     "Total playlists",      VIOLET_LIGHT),
-        (c2, n_active,  "Active",               GREEN),
-        (c3, n_dormant, "Dormant",              AMBER),
-        (c4, n_archive, "Archive",              "#555"),
-        (c5, n_ghost,   "Ghost",                RED),
+        (c1, total,     "Total playlists",  VIOLET_LIGHT),
+        (c2, n_active,  "In rotation",      GREEN),
+        (c3, n_dormant, "On pause",         AMBER),
+        (c4, n_archive, "Forgotten",        "#555"),
+        (c5, n_ghost,   "Never used",       RED),
     ]:
         with col:
             st.markdown(_stat(val, lbl, color), unsafe_allow_html=True)
@@ -155,14 +164,14 @@ def render(dfm, playlists):
     st.markdown("---")
 
     tab1, tab2, tab3, tab4 = st.tabs([
-        "Active (" + str(n_active) + ")",
-        "Dormant and Archive (" + str(n_dormant + n_archive) + ")",
+        "In rotation (" + str(n_active) + ")",
+        "On pause and Forgotten (" + str(n_dormant + n_archive) + ")",
         "Identity Gap",
         "Merge Candidates",
     ])
 
     with tab1:
-        st.markdown("### Active playlists")
+        st.markdown("### Playlists in rotation")
         st.caption("40%+ of tracks played all-time AND at least 1 play in the last 12 months. Sorted by 12-month coverage.")
         active = df[df["status"] == "Active"].sort_values("pct_12m", ascending=False)
         if active.empty:
@@ -182,18 +191,24 @@ def render(dfm, playlists):
                     )
 
     with tab2:
-        st.markdown("### Dormant and archive playlists")
+        st.markdown("### Playlists on pause or forgotten")
+        st.markdown(
+            "<div style='color:#555;font-size:.8em;margin-bottom:12px;line-height:1.7;'>"
+            "<b style='color:#f59e0b;'>On pause</b> — you used these before, nothing played in the last 12 months.<br>"
+            "<b style='color:#555;'>Forgotten</b> — built but barely used, less than 20% of tracks ever played."
+            "</div>",
+            unsafe_allow_html=True
+        )
         dead = df[df["status"].isin(["Archive", "Dormant"])].copy()
         dead["_sort"] = dead["pct_all"]
         dead = dead.sort_values("_sort")
         if dead.empty:
-            st.success("No dormant or archive playlists found.")
+            st.success("Nothing on pause or forgotten.")
         else:
             cols = st.columns(2)
             for i, (_, row) in enumerate(dead.iterrows()):
                 last  = row["last_played"].strftime("%b %Y") if row["last_played"] else "Never played"
-                color = "#555" if row["status"] == "Archive" else AMBER
-                label = "Archive" if row["status"] == "Archive" else "Dormant"
+                label, color = _status_label(row["status"])
                 with cols[i % 2]:
                     _card(
                         "<div style='display:flex;justify-content:space-between;align-items:center;'>"
@@ -210,20 +225,20 @@ def render(dfm, playlists):
         ghosts = df[df["status"] == "Ghost"].sort_values("total_tracks", ascending=False)
         if not ghosts.empty:
             st.markdown("---")
-            st.markdown("### " + str(len(ghosts)) + " Ghost Playlists - built, never played")
+            st.markdown("### " + str(len(ghosts)) + " Never used — built, zero plays")
             cols = st.columns(2)
             for i, (_, row) in enumerate(ghosts.iterrows()):
                 with cols[i % 2]:
                     _card(
                         "<div style='font-weight:700;color:#444;'>" + _esc(row["name"]) + "</div>"
                         "<div style='color:#333;font-size:.76em;margin-top:4px;'>"
-                        + str(int(row["total_tracks"])) + " tracks | 0 plays</div>",
+                        + str(int(row["total_tracks"])) + " tracks | 0% played</div>",
                         border="#333"
                     )
 
     with tab3:
         st.markdown("### The gap between what you build and what you play")
-        st.caption("Playlists with the lowest all-time play coverage. Minimum 5 tracks.")
+        st.caption("Playlists sorted by lowest all-time play rate. Minimum 5 tracks.")
         gap = (
             df[(df["total_tracks"] >= 5) & (df["pct_all"] < 80)]
             .sort_values("pct_all").head(30)
@@ -236,14 +251,14 @@ def render(dfm, playlists):
                 y=gap["name"].apply(_esc),
                 orientation="h",
                 marker_color=[RED if p < 20 else AMBER if p < 40 else VIOLET for p in gap["pct_all"]],
-                text=[str(p) + "% played (" + str(int(t)) + " tracks)"
+                text=[str(p) + "% of tracks played (" + str(int(t)) + " total)"
                       for p, t in zip(gap["pct_all"], gap["total_tracks"])],
                 textposition="outside",
             ))
             fig.update_layout(
                 plot_bgcolor="#111", paper_bgcolor="#111", font_color="#aaa",
                 yaxis=dict(autorange="reversed", tickfont=dict(size=11, color="#ccc")),
-                xaxis=dict(gridcolor="#1a1a1a", title="% tracks played all-time", range=[0, 120]),
+                xaxis=dict(gridcolor="#1a1a1a", title="% of tracks played all-time", range=[0, 120]),
                 margin=dict(l=200, r=80, t=10, b=20),
                 height=max(300, len(gap) * 30)
             )
@@ -251,7 +266,7 @@ def render(dfm, playlists):
 
     with tab4:
         st.markdown("### Playlists that overlap - merge candidates")
-        st.caption("Pairs sharing 40%+ of their artists. Active or dormant only, minimum 3 tracks.")
+        st.caption("Pairs sharing 40%+ of their artists. In rotation or on pause only, minimum 3 tracks.")
         candidates = df[
             (df["status"].isin(["Active", "Dormant"])) & (df["total_tracks"] >= 3)
         ].reset_index(drop=True)
@@ -287,7 +302,7 @@ def render(dfm, playlists):
                         "</div>"
                         "<span style='color:" + sc + ";font-size:1.1em;font-weight:900;"
                         "background:" + sc + "22;padding:4px 12px;border-radius:10px;'>"
-                        + str(row["sim"]) + "%</span>"
+                        + str(row["sim"]) + "% overlap</span>"
                         "</div>",
                         border=sc
                     )
