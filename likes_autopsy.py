@@ -41,11 +41,13 @@ def render(dfm, lib):
 
     # per-artist catalogue size from liked
     liked_catalogue = liked_df.groupby("artist").size().reset_index(name="liked_count")
+    liked_catalogue["artist"] = liked_catalogue["artist"].str.lower().str.strip()
 
     played_artists = dfm.groupby("artistName").agg(
         plays=("ms", "count"),
         hours=("ms", lambda x: round(x.sum() / 3600000, 2))
     ).reset_index()
+    played_artists["artistName"] = played_artists["artistName"].str.lower().str.strip()
 
     PLAY_THRESHOLD = 15
 
@@ -93,7 +95,7 @@ def render(dfm, lib):
     )
     total_liked = len(liked)
 
-    n_admired  = len(merged[(merged["liked_count"] >= 3) & (merged["plays"] < 15)])
+    n_admired  = len(merged[(merged["liked_count"] >= 3) & (merged["pct_liked_played"] < 30)])
     n_visceral = len(merged[(merged["liked_count"] == 0) & (merged["plays"] >= 20)])
 
     c1, c2, c3, c4 = st.columns(4)
@@ -122,7 +124,7 @@ def render(dfm, lib):
         col1, col2 = st.columns(2)
 
         admired = (
-            merged[(merged["liked_count"] >= 3) & (merged["plays"] < 15)]
+            merged[(merged["liked_count"] >= 3) & (merged["pct_liked_played"] < 30)]
             .sort_values("_confidence", ascending=False).head(30)
         )
         visceral = (
