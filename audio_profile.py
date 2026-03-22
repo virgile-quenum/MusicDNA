@@ -15,7 +15,9 @@ GENRE_COLORS = [
     "#34d399", "#f472b6", "#fb923c", "#a3e635", "#38bdf8",
 ]
 
-def _fetch_artist_genres(artist_names):
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_artist_genres(artist_names_tuple):
+    artist_names = list(artist_names_tuple)
     """Search Spotify for each artist name and return their genres."""
     genre_map = {}
     for name in artist_names:
@@ -113,7 +115,7 @@ def render(dfm):
     )
 
     with st.spinner("Fetching genre data from Spotify (" + str(len(top_artists_all)) + " artists)..."):
-        genre_map = _fetch_artist_genres(top_artists_all)
+        genre_map = _fetch_artist_genres(tuple(top_artists_all))
 
     if not genre_map:
         st.warning("Could not load genre data from Spotify.")
