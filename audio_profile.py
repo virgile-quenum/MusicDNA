@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 from collections import Counter
 from spotify_auth import api_get, is_authenticated
 
@@ -9,126 +10,82 @@ GREEN        = "#1DB954"
 AMBER        = "#f59e0b"
 RED          = "#f87171"
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+GENRE_COLORS = [
+    VIOLET_LIGHT, GREEN, AMBER, RED, "#60a5fa",
+    "#34d399", "#f472b6", "#fb923c", "#a3e635", "#38bdf8",
+]
 
-def _card(content, border=VIOLET):
-    st.markdown(
-        "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
-        "border-left:3px solid " + border + ";border-radius:8px;"
-        "padding:14px;margin-bottom:10px;'>" + content + "</div>",
-        unsafe_allow_html=True
-    )
-
-def _stat(val, lbl, color=VIOLET_LIGHT):
-    st.markdown(
-        "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
-        "border-radius:10px;padding:14px;text-align:center;'>"
-        "<div style='font-size:1.5em;font-weight:900;color:" + color + ";'>"
-        + str(val) + "</div>"
-        "<div style='font-size:.72em;color:#555;margin-top:4px;'>" + lbl + "</div>"
-        "</div>",
-        unsafe_allow_html=True
-    )
-
-def _audio_bar(label, value, color=VIOLET_LIGHT):
-    pct = int(value * 100)
-    return (
-        "<div style='margin-bottom:10px;'>"
-        "<div style='display:flex;justify-content:space-between;margin-bottom:3px;'>"
-        "<span style='font-size:.8em;color:#888;'>" + label + "</span>"
-        "<span style='font-size:.8em;font-weight:700;color:" + color + ";'>"
-        + str(pct) + "%</span></div>"
-        "<div style='background:#1e1e1e;border-radius:4px;height:6px;'>"
-        "<div style='background:" + color + ";width:" + str(pct) + "%;"
-        "height:6px;border-radius:4px;'></div></div></div>"
-    )
-
-def _fetch_features_for_uris(track_uris):
-    """Fetch audio features from a list of spotify:track:XXX URIs."""
-    ids = [u.split(":")[-1] for u in track_uris if u and u.startswith("spotify:track:")]
-    if not ids:
-        return {}
-    # batch in groups of 50
-    feat_map = {}
-    for i in range(0, min(len(ids), 200), 50):
-        batch = ids[i:i+50]
-        data  = api_get("audio-features", {"ids": ",".join(batch)})
-        for f in (data.get("audio_features", []) if data else []):
-            if f and "id" in f:
-                feat_map[f["id"]] = f
-    return feat_map
-
-def _uri_to_id(uri):
-    if uri and uri.startswith("spotify:track:"):
-        return uri.split(":")[-1]
-    return None
-
-# ── analysis ──────────────────────────────────────────────────────────────────
-
-def _yearly_audio_profile(dfm):
-    """
-    Computes per-year audio averages using top played track_uris from history.
-    Returns a DataFrame with columns: year, energy, danceability, valence, tempo, n_tracks
-    """
-    if "track_uri" not in dfm.columns:
-        return pd.DataFrame()
-
-    # get top 30 most played tracks per year (to limit API calls)
-    yearly = (
-        dfm[dfm["track_uri"].str.startswith("spotify:track:", na=False)]
-        .groupby(["year", "track_uri"])
-        .size()
-        .reset_index(name="plays")
-    )
-
-    years       = sorted(yearly["year"].unique())
-    all_uris    = yearly.groupby("year").apply(
-        lambda x: x.nlargest(30, "plays")["track_uri"].tolist()
-    )
-    unique_uris = list({u for uris in all_uris for u in uris})
-
-    if not unique_uris:
-        return pd.DataFrame()
-
-    with st.spinner("Fetching audio features for your history (" + str(len(unique_uris)) + " tracks)..."):
-        feat_map = _fetch_features_for_uris(unique_uris)
-
-    if not feat_map:
-        return pd.DataFrame()
-
-    rows = []
-    for year, uris in all_uris.items():
-        feats = [feat_map[_uri_to_id(u)] for u in uris
-                 if _uri_to_id(u) in feat_map]
-        if not feats:
+def _fetch_artist_genres(artist_names):
+    """Search Spotify for each artist name and return their genres."""
+    genre_map = {}
+    for name in artist_names:
+        if not name or name in genre_map:
             continue
-        df_f = pd.DataFrame(feats)
-        row  = {"year": year}
-        for col in ["energy","danceability","valence","acousticness","tempo"]:
-            if col in df_f.columns:
-                row[col] = df_f[col].mean()
-        row["n_tracks"] = len(feats)
-        rows.append(row)
+        data = api_get("search", {"q": name, "type": "artist", "limit": 1})
+        if not data:
+            continue
+        items = data.get("artists", {}).get("items", [])
+        if items:
+            genres = items[0].get("genres", [])
+            genre_map[name] = genres[:3]  # top 3 genres per artist
+    return genre_map
 
-    return pd.DataFrame(rows).sort_values("year")
+def _normalize_genre(genre):
+    """Collapse sub-genres into broader families."""
+    g = genre.lower()
+    if any(k in g for k in ["afro", "afrobeat", "afropop", "afrotrap"]):
+        return "Afrobeats"
+    if any(k in g for k in ["hip hop", "hip-hop", "rap", "trap", "drill"]):
+        return "Hip-Hop / Rap"
+    if any(k in g for k in ["r&b", "rnb", "soul", "funk"]):
+        return "R&B / Soul"
+    if any(k in g for k in ["jazz"]):
+        return "Jazz"
+    if any(k in g for k in ["reggae", "dancehall", "reggaeton", "kompa", "zouk", "soca"]):
+        return "Caribbean / Reggae"
+    if any(k in g for k in ["pop"]):
+        return "Pop"
+    if any(k in g for k in ["rock", "indie", "alternative", "punk", "metal"]):
+        return "Rock / Indie"
+    if any(k in g for k in ["electronic", "dance", "house", "techno", "edm", "club"]):
+        return "Electronic / Dance"
+    if any(k in g for k in ["classical", "orchestra", "piano", "opera"]):
+        return "Classical"
+    if any(k in g for k in ["world", "latin", "bossa", "samba", "cumbia", "salsa", "bachata"]):
+        return "World / Latin"
+    if any(k in g for k in ["blues", "country", "folk"]):
+        return "Blues / Country / Folk"
+    if any(k in g for k in ["children", "kids", "nursery", "lullaby"]):
+        return "Children's"
+    return "Other"
 
-
-def _current_audio_profile():
-    """Fetch current top 20 tracks + audio features from Spotify."""
-    data   = api_get("me/top/tracks", {"time_range": "medium_term", "limit": 20})
-    tracks = data.get("items", []) if data else []
-    if not tracks:
-        return None, []
-    ids   = [t["id"] for t in tracks if t.get("id")]
-    feats = [f for f in (api_get("audio-features", {"ids": ",".join(ids[:50])}) or {}).get("audio_features", []) if f]
-    if not feats:
-        return None, tracks
-    df    = pd.DataFrame(feats)
-    avg   = df[["energy","danceability","valence","acousticness","tempo"]].dropna().mean()
-    return avg, tracks
-
-
-# ── render ────────────────────────────────────────────────────────────────────
+def _yearly_genre_profile(dfm, genre_map):
+    """Build per-year genre distribution from history + genre_map."""
+    rows = []
+    for year, grp in dfm.groupby("year"):
+        top_artists = (
+            grp.groupby("artistName")["ms"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(20)
+            .index.tolist()
+        )
+        genre_counts = Counter()
+        for artist in top_artists:
+            raw_genres = genre_map.get(artist, [])
+            for g in raw_genres:
+                normalized = _normalize_genre(g)
+                if normalized != "Other" and normalized != "Children's":
+                    genre_counts[normalized] += 1
+        if genre_counts:
+            total = sum(genre_counts.values())
+            for genre, count in genre_counts.most_common(5):
+                rows.append({
+                    "year":  year,
+                    "genre": genre,
+                    "pct":   round(count / total * 100, 1),
+                })
+    return pd.DataFrame(rows)
 
 def render(dfm):
     st.markdown(
@@ -136,204 +93,163 @@ def render(dfm):
         "text-transform:uppercase;letter-spacing:.1em;'>Full DNA — File + Spotify</span>",
         unsafe_allow_html=True
     )
-    st.title("Audio Profile")
-    st.caption("How your musical energy, mood and tempo evolved over the years — vs. who you are now.")
+    st.title("Genre Profile")
+    st.caption("How your musical genres evolved year by year — built from your top artists per year.")
 
     if not is_authenticated():
-        st.warning("Connect Spotify to unlock this analysis (needed for audio features).")
+        st.warning("Connect Spotify to unlock this analysis.")
         return
-
     if dfm is None or dfm.empty:
         st.warning("Upload your Extended History zip to enable this analysis.")
         return
 
-    tab1, tab2 = st.tabs(["Evolution Over Time", "Now vs. History"])
+    # get top artists across all years (limit API calls)
+    top_artists_all = (
+        dfm.groupby("artistName")["ms"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(80)
+        .index.tolist()
+    )
 
-    # ── Tab 1: evolution ──────────────────────────────────────────────────────
+    with st.spinner("Fetching genre data from Spotify (" + str(len(top_artists_all)) + " artists)..."):
+        genre_map = _fetch_artist_genres(top_artists_all)
+
+    if not genre_map:
+        st.warning("Could not load genre data from Spotify.")
+        return
+
+    yearly_df = _yearly_genre_profile(dfm, genre_map)
+
+    if yearly_df.empty:
+        st.info("Not enough genre data to build a profile.")
+        return
+
+    tab1, tab2, tab3 = st.tabs(["Evolution Over Time", "Your Genre DNA", "Dominant Genre Per Year"])
+
+    # ── Tab 1: stacked area chart ─────────────────────────────────────────────
     with tab1:
-        st.markdown("### How your sound changed year by year")
-        st.caption("Built from your top 30 most-played tracks per year.")
+        st.markdown("### Genre evolution — year by year")
+        st.caption("% share of each genre among your top 20 artists per year.")
 
-        yearly_df = _yearly_audio_profile(dfm)
+        genres_all = yearly_df["genre"].unique().tolist()
+        pivot = yearly_df.pivot_table(
+            index="year", columns="genre", values="pct", aggfunc="sum"
+        ).fillna(0).reset_index()
 
-        if yearly_df.empty:
-            st.info("Not enough track URI data to compute yearly audio profiles. "
-                    "This requires an Extended History export.")
-        else:
-            try:
-                import plotly.graph_objects as go
+        fig = go.Figure()
+        for i, genre in enumerate(genres_all):
+            if genre not in pivot.columns:
+                continue
+            color = GENRE_COLORS[i % len(GENRE_COLORS)]
+            fig.add_trace(go.Scatter(
+                x=pivot["year"],
+                y=pivot[genre],
+                mode="lines+markers",
+                name=genre,
+                line=dict(color=color, width=2),
+                marker=dict(size=5),
+                stackgroup="one",
+                fillcolor=color.replace("#", "") and color + "55",
+            ))
 
-                fig = go.Figure()
-                metrics = [
-                    ("energy",       "Energy",       RED),
-                    ("danceability", "Danceability",  GREEN),
-                    ("valence",      "Positivity",    AMBER),
-                    ("acousticness", "Acousticness",  "#60a5fa"),
-                ]
-                for key, label, color in metrics:
-                    if key in yearly_df.columns:
-                        fig.add_trace(go.Scatter(
-                            x=yearly_df["year"],
-                            y=(yearly_df[key] * 100).round(1),
-                            mode="lines+markers",
-                            name=label,
-                            line=dict(color=color, width=2),
-                            marker=dict(size=6),
-                        ))
+        fig.update_layout(
+            paper_bgcolor="#050505",
+            plot_bgcolor="#0f0f0f",
+            font=dict(color="#888", size=12),
+            legend=dict(bgcolor="#0f0f0f", bordercolor="#1e1e1e", borderwidth=1,
+                        orientation="h", yanchor="bottom", y=1.02),
+            xaxis=dict(gridcolor="#1e1e1e", tickformat="d"),
+            yaxis=dict(gridcolor="#1e1e1e", title="Share (%)"),
+            margin=dict(l=0, r=0, t=40, b=0),
+            height=420,
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-                fig.update_layout(
-                    paper_bgcolor="#050505",
-                    plot_bgcolor="#0f0f0f",
-                    font=dict(color="#888", size=12),
-                    legend=dict(bgcolor="#0f0f0f", bordercolor="#1e1e1e", borderwidth=1),
-                    xaxis=dict(gridcolor="#1e1e1e", tickformat="d"),
-                    yaxis=dict(gridcolor="#1e1e1e", title="Score (%)"),
-                    margin=dict(l=0, r=0, t=10, b=0),
-                    height=380,
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-            except ImportError:
-                # fallback table if plotly not available
-                disp = yearly_df.copy()
-                for col in ["energy","danceability","valence","acousticness"]:
-                    if col in disp.columns:
-                        disp[col] = (disp[col] * 100).round(1).astype(str) + "%"
-                if "tempo" in disp.columns:
-                    disp["tempo"] = disp["tempo"].round(0).astype(int).astype(str) + " BPM"
-                st.dataframe(disp.set_index("year"), use_container_width=True)
-
-            # highlight biggest change
-            if len(yearly_df) >= 2 and "energy" in yearly_df.columns:
-                first_e = yearly_df["energy"].iloc[0]
-                last_e  = yearly_df["energy"].iloc[-1]
-                delta   = last_e - first_e
-                first_y = int(yearly_df["year"].iloc[0])
-                last_y  = int(yearly_df["year"].iloc[-1])
-
-                if abs(delta) > 0.08:
-                    direction = "higher" if delta > 0 else "lower"
-                    _card(
-                        "<div style='color:#ccc;font-size:.88em;line-height:1.6;'>"
-                        "Your energy level is <b style='color:#fff;'>"
-                        + str(int(abs(delta) * 100)) + " points " + direction + "</b>"
-                        " now than in " + str(first_y) + ". "
-                        + ("You've been escalating." if delta > 0 else "You've mellowed out.")
-                        + "</div>",
-                        border=RED if delta > 0 else "#60a5fa"
-                    )
-
-            # BPM line
-            if "tempo" in yearly_df.columns:
-                st.markdown("### BPM Over Time")
-                try:
-                    import plotly.graph_objects as go
-                    fig2 = go.Figure()
-                    fig2.add_trace(go.Bar(
-                        x=yearly_df["year"],
-                        y=yearly_df["tempo"].round(0),
-                        marker_color=VIOLET,
-                        name="Avg BPM"
-                    ))
-                    fig2.update_layout(
-                        paper_bgcolor="#050505",
-                        plot_bgcolor="#0f0f0f",
-                        font=dict(color="#888", size=12),
-                        xaxis=dict(gridcolor="#1e1e1e", tickformat="d"),
-                        yaxis=dict(gridcolor="#1e1e1e", title="BPM"),
-                        margin=dict(l=0, r=0, t=10, b=0),
-                        height=260,
-                        showlegend=False
-                    )
-                    st.plotly_chart(fig2, use_container_width=True)
-                except ImportError:
-                    pass
-
-    # ── Tab 2: now vs history ─────────────────────────────────────────────────
+    # ── Tab 2: all-time genre DNA ─────────────────────────────────────────────
     with tab2:
-        st.markdown("### Your current Spotify taste vs. your all-time history")
-        st.caption("Left = your top tracks right now (6 months). Right = your all-time average from the full history.")
+        st.markdown("### Your all-time genre DNA")
+        st.caption("Weighted by listening hours — not just play count.")
 
-        current_avg, _ = _current_audio_profile()
+        # build all-time genre hours
+        genre_hours = Counter()
+        for artist, genres in genre_map.items():
+            artist_hours = dfm[dfm["artistName"] == artist]["ms"].sum() / 3600000
+            for g in genres:
+                normalized = _normalize_genre(g)
+                if normalized not in ("Other", "Children's"):
+                    genre_hours[normalized] += artist_hours
 
-        if current_avg is None:
-            st.warning("Could not load current Spotify data.")
-        elif yearly_df.empty:
-            st.warning("Not enough history data for comparison.")
+        if not genre_hours:
+            st.info("Not enough data.")
         else:
-            # all-time average from history
-            history_avg = yearly_df[["energy","danceability","valence","acousticness"]].mean()
+            total_h = sum(genre_hours.values())
+            top_genres = genre_hours.most_common(10)
 
-            metrics = [
-                ("energy",       "Energy",       RED),
-                ("danceability", "Danceability",  GREEN),
-                ("valence",      "Positivity",    AMBER),
-                ("acousticness", "Acousticness",  "#60a5fa"),
-            ]
-
-            c_now, c_hist = st.columns(2)
-            with c_now:
-                st.markdown(
-                    "<div style='color:#1DB954;font-size:.75em;font-weight:700;"
-                    "text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;'>"
-                    "Now (last 6 months)</div>",
-                    unsafe_allow_html=True
-                )
-                now_bars = ""
-                for _, key, color in metrics:
-                    if key in current_avg:
-                        now_bars += _audio_bar(key.capitalize(), float(current_avg[key]), color)
-                st.markdown(
-                    "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
-                    "border-radius:12px;padding:16px;'>" + now_bars + "</div>",
-                    unsafe_allow_html=True
+            bars_html = ""
+            for i, (genre, hours) in enumerate(top_genres):
+                pct   = int(hours / total_h * 100)
+                color = GENRE_COLORS[i % len(GENRE_COLORS)]
+                bars_html += (
+                    "<div style='margin-bottom:12px;'>"
+                    "<div style='display:flex;justify-content:space-between;margin-bottom:3px;'>"
+                    "<span style='font-size:.85em;color:#ccc;font-weight:500;'>" + genre + "</span>"
+                    "<span style='font-size:.85em;color:" + color + ";font-weight:700;'>"
+                    + str(int(hours)) + "h (" + str(pct) + "%)</span>"
+                    "</div>"
+                    "<div style='background:#1e1e1e;border-radius:4px;height:8px;'>"
+                    "<div style='background:" + color + ";width:" + str(pct) + "%;"
+                    "height:8px;border-radius:4px;'></div>"
+                    "</div>"
+                    "</div>"
                 )
 
-            with c_hist:
-                st.markdown(
-                    "<div style='color:" + VIOLET_LIGHT + ";font-size:.75em;font-weight:700;"
-                    "text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;'>"
-                    "All-time average</div>",
-                    unsafe_allow_html=True
-                )
-                hist_bars = ""
-                for _, key, color in metrics:
-                    if key in history_avg:
-                        hist_bars += _audio_bar(key.capitalize(), float(history_avg[key]), color)
-                st.markdown(
-                    "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
-                    "border-radius:12px;padding:16px;'>" + hist_bars + "</div>",
-                    unsafe_allow_html=True
-                )
-
-            # delta insights
             st.markdown(
-                "<div style='color:#A78BFA;font-size:.75em;font-weight:700;"
-                "text-transform:uppercase;letter-spacing:.1em;margin:20px 0 12px;'>"
-                "What changed</div>",
+                "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
+                "border-radius:12px;padding:20px;'>" + bars_html + "</div>",
                 unsafe_allow_html=True
             )
 
-            insights = []
-            for label, key, color in metrics:
-                if key in current_avg and key in history_avg:
-                    delta = float(current_avg[key]) - float(history_avg[key])
-                    if abs(delta) > 0.06:
-                        direction = "up" if delta > 0 else "down"
-                        pts       = str(int(abs(delta) * 100))
-                        insights.append((label, direction, pts, color))
+            # taste summary
+            dominant = top_genres[0][0] if top_genres else "—"
+            second   = top_genres[1][0] if len(top_genres) > 1 else "—"
+            st.markdown(
+                "<div style='background:#0f0f0f;border:1px solid " + VIOLET + "44;"
+                "border-radius:12px;padding:16px;margin-top:16px;'>"
+                "<div style='color:#555;font-size:.82em;line-height:1.8;'>"
+                "Your listening is dominated by <b style='color:#fff;'>" + dominant + "</b> "
+                "and <b style='color:#fff;'>" + second + "</b>. "
+                "That's not a playlist — that's a personality."
+                "</div>"
+                "</div>",
+                unsafe_allow_html=True
+            )
 
-            if insights:
-                for label, direction, pts, color in insights:
-                    arrow = "↑" if direction == "up" else "↓"
-                    change_desc = "higher" if direction == "up" else "lower"
-                    _card(
-                        "<span style='color:" + color + ";font-weight:800;font-size:.95em;'>"
-                        + arrow + " " + label + "</span>"
-                        "<span style='color:#888;font-size:.85em;margin-left:8px;'>"
-                        + pts + " points " + change_desc + " than your all-time average"
-                        "</span>",
-                        border=color
-                    )
-            else:
-                st.info("Your current listening profile is consistent with your all-time average. Stable taste.")
+    # ── Tab 3: dominant genre per year ────────────────────────────────────────
+    with tab3:
+        st.markdown("### #1 genre per year")
+
+        top_per_year = (
+            yearly_df.sort_values("pct", ascending=False)
+            .groupby("year")
+            .first()
+            .reset_index()
+            .sort_values("year", ascending=False)
+        )
+
+        for _, row in top_per_year.iterrows():
+            idx   = list(genres_all).index(row["genre"]) if row["genre"] in genres_all else 0
+            color = GENRE_COLORS[idx % len(GENRE_COLORS)]
+            st.markdown(
+                "<div style='display:flex;align-items:center;gap:16px;"
+                "padding:10px 16px;border:1px solid #1e1e1e;"
+                "border-radius:8px;margin-bottom:6px;background:#0f0f0f;'>"
+                "<span style='font-size:.85em;color:#555;min-width:36px;'>"
+                + str(int(row["year"])) + "</span>"
+                "<span style='font-weight:700;color:#fff;flex:1;'>" + row["genre"] + "</span>"
+                "<span style='color:" + color + ";font-size:.8em;font-weight:700;"
+                "background:" + color + "22;padding:2px 10px;border-radius:10px;'>"
+                + str(row["pct"]) + "%</span>"
+                "</div>",
+                unsafe_allow_html=True
+            )
