@@ -1,145 +1,244 @@
 import streamlit as st
 import pandas as pd
 
+VIOLET       = "#7C3AED"
+VIOLET_LIGHT = "#A78BFA"
+GREEN        = "#1DB954"
+AMBER        = "#f59e0b"
+RED          = "#f87171"
+
 SIGNS = [
     {
-        "name": "The Feverish Archivist",
-        "fr": "L'Archiviste Fiévreux",
+        "name":  "The Feverish Archivist",
+        "emoji": "📚",
+        "sign":  "♒",
         "condition": lambda s: s["liked_pct"] > 40 and s["never_played_pct"] > 35,
-        "curse":  "You build libraries you never open. {never_played_pct:.0f}% of your likes have never been played. You collect music like others collect books they'll never read.",
-        "gift":   "When you find something, you commit. Your top track has {top_plays} plays. Your attention is total or absent — there is no middle ground.",
-        "sign":   "♒",
+        "curse":      "You build libraries you never open. {never_played_pct:.0f}% of your likes have never been played. You collect music the way others collect books they intend to read. The shelf looks impressive. It is mostly decorative.",
+        "gift":       "When you do commit, it is total. Your top track has {top_plays} plays. Your attention is binary — complete or absent. There is no casual listening in your world.",
         "prediction": "Your collection keeps growing. Your actual listening does not. One day you will open those unplayed likes. That day is not today.",
+        "data_line":  "You have liked {liked_n} tracks. {never_played_pct:.0f}% have never been played.",
     },
     {
-        "name": "The Saturday Digger",
-        "fr": "Le Fouilleur du Samedi",
+        "name":  "The Saturday Digger",
+        "emoji": "🕯️",
+        "sign":  "♌",
         "condition": lambda s: s["sat_pct"] > 18,
-        "curse":  "Saturday is your temple. {sat_h:.0f}h on Saturdays alone. You do not listen through the week — you save yourself for it.",
-        "gift":   "You listen with intention. Saturday listening is never background. It is a ritual.",
-        "sign":   "♌",
-        "prediction": "Your best discoveries happen on weekends. Your taste is formed on Saturday mornings. This will never change.",
+        "curse":      "Saturday is your temple. {sat_h:.0f} hours on Saturdays alone across your history. You do not really listen through the week — you queue things up and save yourself for it. This is either discipline or avoidance.",
+        "gift":       "Saturday listening is never background. It is a ritual. The tracks you choose on Saturday mornings are the ones that actually matter to you.",
+        "prediction": "Your best discoveries happen on weekends. Your taste is formed on Saturday mornings. This will not change.",
+        "data_line":  "{sat_pct:.0f}% of your total listening happens on Saturdays.",
     },
     {
-        "name": "The Cultural Nomad",
-        "fr": "Le Voyageur Culturel",
+        "name":  "The Cultural Nomad",
+        "emoji": "🌍",
+        "sign":  "♐",
         "condition": lambda s: s["unique_artists"] > 5000,
-        "curse":  "{unique_artists:,} artists. You cannot commit. You are always looking for the next one. The one you just found will be forgotten by Tuesday.",
-        "gift":   "Your breadth is genuinely exceptional. You are not a niche listener. You are the algorithm's nightmare and dream simultaneously.",
-        "sign":   "♐",
-        "prediction": "You will discover {proj_new} new artists this year. You will remember 12 of them.",
+        "curse":      "{unique_artists:,} artists. You cannot commit. You are always looking for the next one. The artist you discovered last Tuesday is already background noise.",
+        "gift":       "Your breadth is genuinely exceptional. You are not a niche listener. You are the algorithm's nightmare and dream simultaneously. No one can predict what you play next.",
+        "prediction": "You will discover approximately {proj_new} new artists this year. You will remember about 15 of them.",
+        "data_line":  "{unique_artists:,} unique artists across {n_years} years. That is {art_per_year:.0f} per year.",
     },
     {
-        "name": "The Binge Listener",
-        "fr": "L'Écouteur Compulsif",
+        "name":  "The Binge Listener",
+        "emoji": "🌀",
+        "sign":  "♏",
         "condition": lambda s: s["binge_sessions"] > 20,
-        "curse":  "{binge_sessions} sessions over 2 hours. You do not listen to music — you disappear into it. This is not a hobby. It is a coping mechanism.",
-        "gift":   "You are capable of total immersion. Most people never experience music the way you do.",
-        "sign":   "♏",
-        "prediction": "Your next binge session is already scheduled. You just do not know it yet.",
+        "curse":      "{binge_sessions} sessions over 2 hours in your history. You do not listen to music — you disappear into it. This is not a hobby. It is a pressure valve.",
+        "gift":       "You are capable of total immersion. Most people never experience music the way you do. Your longest sessions are probably your best memories.",
+        "prediction": "Your next binge session is already scheduled. You just do not know it yet. Something will trigger it.",
+        "data_line":  "{binge_sessions} sessions over 2h. Your peak listening year was {peak_year}.",
     },
     {
-        "name": "The Loyal One",
-        "fr": "Le Fidèle Absolu",
+        "name":  "The Loyal One",
+        "emoji": "❤️",
+        "sign":  "♉",
         "condition": lambda s: s["top_artist_pct"] > 8,
-        "curse":  "Your #1 artist alone accounts for {top_artist_pct:.0f}% of your total listening. You found something. You never left. Everyone around you has heard enough.",
-        "gift":   "You go deep. Most people skim. You know every version, every live recording, every b-side. That knowledge is real.",
-        "sign":   "♉",
-        "prediction": "You will discover someone new who reminds you of them. You will still go back to the original.",
+        "curse":      "Your #1 artist accounts for {top_artist_pct:.0f}% of your total listening. {top_artist_h:.0f} hours on one artist. You found something. You never left. Everyone around you has heard enough.",
+        "gift":       "You go deep where others skim. You know every version, every live recording, every b-side. That knowledge is real and irreplaceable.",
+        "prediction": "You will discover someone new who reminds you of them. You will still go back to the original within 48 hours.",
+        "data_line":  "Your #1 artist: {top_artist}. {top_artist_h:.0f}h total — {top_artist_pct:.0f}% of your life.",
     },
     {
-        "name": "The Infiltrated Parent",
-        "fr": "Le Parent Infiltré",
+        "name":  "The Infiltrated Parent",
+        "emoji": "👶",
+        "sign":  "♋",
         "condition": lambda s: s["kids_pct"] > 8,
-        "curse":  "{kids_pct:.0f}% of your total Spotify history is children's content. Your child has colonised your account. Spotify thinks you enjoy lullabies.",
-        "gift":   "You kept listening through the chaos. Even with {kids_h:.0f}h of children's music in your history, you maintained your own taste. Respect.",
-        "sign":   "♋",
-        "prediction": "The children's content is declining. Your account is slowly becoming yours again. By 2027 it will be fully reclaimed. Probably.",
+        "curse":      "{kids_pct:.0f}% of your total Spotify history is children's content. {kids_h:.0f} hours of it. Your child has colonised your account. Spotify's algorithm is deeply confused about you.",
+        "gift":       "You kept listening through the chaos. Even with {kids_h:.0f}h of children's music, you maintained your own taste. That is harder than it sounds.",
+        "prediction": "The children's content is declining. Your account is slowly becoming yours again. Full reclamation estimated by 2027. Probably.",
+        "data_line":  "{kids_h:.0f}h of children's content. Peak infiltration: {kids_peak_year}.",
     },
     {
-        "name": "The Obsessive Early Riser",
-        "fr": "Le Lève-Tôt Obsessionnel",
-        "condition": lambda s: s["morning_pct"] > 15,
-        "curse":  "{morning_pct:.0f}% of your listening happens before 8am. You are not using music as background. You are using it as fuel. This is either admirable or concerning.",
-        "gift":   "Morning listening is your most intentional. The tracks you play at 6am are the ones that matter.",
-        "sign":   "♈",
-        "prediction": "Your early morning playlist will remain your most honest musical statement.",
-    },
-    {
-        "name": "The Ghost Collector",
-        "fr": "Le Collectionneur Fantôme",
+        "name":  "The Ghost Collector",
+        "emoji": "👻",
+        "sign":  "♎",
         "condition": lambda s: s["skip_rate"] < 5 and s["unique_artists"] > 1000,
-        "curse":  "You almost never skip. {unique_artists:,} artists and you sit through all of them. You are either extraordinarily patient or incapable of making decisions.",
-        "gift":   "You give everything a chance. Your open-mindedness is statistically rare. Most people skip within 10 seconds.",
-        "sign":   "♎",
-        "prediction": "You will stumble onto something extraordinary by not skipping something you almost did. This happens more than you think.",
+        "curse":      "You almost never skip. {unique_artists:,} artists and you sit through all of them. {skip_rate:.0f}% skip rate. You are either extraordinarily patient or constitutionally incapable of making decisions.",
+        "gift":       "You give everything a real chance. Your open-mindedness is statistically rare. You have stumbled onto things others would have skipped past in 8 seconds.",
+        "prediction": "You will find something extraordinary by not skipping something you almost did. This happens more than you think.",
+        "data_line":  "{skip_rate:.0f}% skip rate. You completed {completion_pct:.0f}% of tracks you started.",
+    },
+    {
+        "name":  "The Obsessive Early Riser",
+        "emoji": "🌅",
+        "sign":  "♈",
+        "condition": lambda s: s["morning_pct"] > 15,
+        "curse":      "{morning_pct:.0f}% of your listening happens before 8am. You are not using music as background. You are using it as ignition. This is either a superpower or a sign of insomnia.",
+        "gift":       "Morning listening is your most intentional. The tracks you play at 6am are the ones that actually matter. Everything after noon is maintenance.",
+        "prediction": "Your early morning playlist will remain your most honest musical statement. What you play at 6am is who you really are.",
+        "data_line":  "{morning_pct:.0f}% of listening before 8am. Peak hour: {peak_hour:02d}h.",
+    },
+    {
+        "name":  "The Night Shift",
+        "emoji": "🌙",
+        "sign":  "♓",
+        "condition": lambda s: s["night_pct"] > 20,
+        "curse":      "{night_pct:.0f}% of your listening happens after 10pm. You are not a daytime listener. You are building the soundtrack to the version of yourself that only exists after midnight.",
+        "gift":       "Late night listening is unfiltered. No performance, no context. What you play alone at 1am is your most authentic musical self.",
+        "prediction": "Your night listening will intensify before it improves. Something is unresolved. Music knows before you do.",
+        "data_line":  "{night_pct:.0f}% of listening after 10pm. {night_h:.0f}h in the dark.",
+    },
+    {
+        "name":  "The Decade Devotee",
+        "emoji": "⏳",
+        "sign":  "♑",
+        "condition": lambda s: s["old_music_pct"] > 40,
+        "curse":      "{old_music_pct:.0f}% of your listening is artists you first discovered over 5 years ago. You are not looking for new music. You are maintaining a relationship with the past.",
+        "gift":       "You know what you love. The artists that survived 5 years with you are the real ones. Everything else was experimentation.",
+        "prediction": "You will discover someone new this year who will join the permanent collection. It will remind you of something from {oldest_year}.",
+        "data_line":  "{old_music_pct:.0f}% of plays from artists discovered 5+ years ago.",
+    },
+    {
+        "name":  "The Shuffle Addict",
+        "emoji": "🎲",
+        "sign":  "♊",
+        "condition": lambda s: s["shuffle_pct"] > 60,
+        "curse":      "{shuffle_pct:.0f}% of your listening is on shuffle. You have {unique_artists:,} artists but you let the algorithm decide. You built the library. You outsourced the curation.",
+        "gift":       "Shuffle listening keeps you open to surprise. Your accidental discoveries are probably more interesting than your intentional ones.",
+        "prediction": "Your next favourite track will come from a shuffle play you almost skipped. Pay attention.",
+        "data_line":  "{shuffle_pct:.0f}% shuffle rate across {total_plays:,} plays.",
+    },
+    {
+        "name":  "The Depth Diver",
+        "emoji": "🔬",
+        "sign":  "♍",
+        "condition": lambda s: s["tracks_per_artist"] < 2.5 and s["unique_artists"] > 2000,
+        "curse":      "{unique_artists:,} artists but only {tracks_per_artist:.1f} tracks per artist on average. You taste everything and commit to nothing. Your library is a museum of first impressions.",
+        "gift":       "You have more genuine discoveries than anyone. Your breadth of taste is not a deficiency — it is a different kind of depth.",
+        "prediction": "You will find an artist this year that breaks your pattern. You will listen to their entire catalogue. It will feel unfamiliar and right.",
+        "data_line":  "{tracks_per_artist:.1f} avg tracks per artist across {unique_artists:,} artists.",
     },
 ]
 
 DEFAULT_SIGN = {
-    "name": "The Committed Eclectic",
-    "fr": "L'Éclectique Assumé",
-    "curse": "You defy categorisation. {unique_artists:,} artists across every genre and era. You are every algorithm's blind spot.",
-    "gift":  "Genuine breadth is rare. Most people say they're eclectic. Your data proves it.",
-    "sign":  "♊",
+    "name":  "The Committed Eclectic",
+    "emoji": "🎭",
+    "sign":  "✦",
+    "curse":      "You defy categorisation. {unique_artists:,} artists across every genre and era. You are every algorithm's blind spot. No recommendation engine has a model for you.",
+    "gift":       "Genuine breadth is rare. Most people say they are eclectic. Your data proves it across {n_years} years.",
     "prediction": "You will continue to surprise yourself with what you play next. This is the best possible outcome.",
+    "data_line":  "{unique_artists:,} artists · {n_years} years · no clear pattern.",
 }
 
 def compute_stats(dfm, dfd, lib=None):
-    total_all_ms = dfm["ms"].sum() + (dfd["ms"].sum() if dfd is not None and not dfd.empty else 0)
+    total_ms     = dfm["ms"].sum()
+    total_all_ms = total_ms + (dfd["ms"].sum() if dfd is not None and not dfd.empty else 0)
     kids_ms      = dfd["ms"].sum() if dfd is not None and not dfd.empty else 0
     sat_ms       = dfm[dfm["dow"] == 5]["ms"].sum()
     morning_ms   = dfm[dfm["hour"].between(5, 7)]["ms"].sum()
-    track_top    = dfm.groupby("trackName")["ms"].count().max() if not dfm.empty else 0
+    night_ms     = dfm[dfm["hour"] >= 22]["ms"].sum()
 
-    # top artist share
+    yr_min    = int(dfm["year"].min())
+    yr_max    = int(dfm["year"].max())
+    n_years   = max(yr_max - yr_min + 1, 1)
+    unique_art = dfm["artistName"].nunique()
+
     artist_ms     = dfm.groupby("artistName")["ms"].sum()
+    top_artist    = artist_ms.idxmax() if not artist_ms.empty else "—"
     top_artist_ms = artist_ms.max() if not artist_ms.empty else 0
-    top_artist_pct = top_artist_ms / dfm["ms"].sum() * 100 if dfm["ms"].sum() > 0 else 0
+    top_artist_pct = top_artist_ms / total_ms * 100 if total_ms > 0 else 0
+    top_artist_h   = top_artist_ms / 3600000
 
-    # skip rate
-    skip_rate = dfm["skipped"].mean() * 100 if "skipped" in dfm.columns else 15
+    track_top  = dfm.groupby("trackName")["ms"].count().max() if not dfm.empty else 0
+    yearly     = dfm.groupby("year")["ms"].sum()
+    peak_year  = int(yearly.idxmax()) if not yearly.empty else yr_max
+    skip_rate  = dfm["skipped"].mean() * 100 if "skipped" in dfm.columns else 15
+    completion_pct = 100 - skip_rate
 
-    # binge sessions (gaps > 30min between plays)
     df_s = dfm.sort_values("ts").copy()
     df_s["gap"] = df_s["ts"].diff().dt.total_seconds().fillna(0)
     df_s["sid"] = (df_s["gap"] > 1800).cumsum()
-    sessions    = df_s.groupby("sid")["ms"].sum() / 3600000
+    sessions       = df_s.groupby("sid")["ms"].sum() / 3600000
     binge_sessions = int((sessions >= 2).sum())
 
-    # liked / never played
-    liked_pct       = 50
-    never_played_pct = 45
+    shuffle_pct = dfm["shuffle"].mean() * 100 if "shuffle" in dfm.columns else 0
+
+    liked_pct = never_played_pct = liked_n = 0
     if lib:
         raw = lib.get("tracks", []) if isinstance(lib, dict) else lib
         if raw:
-            played = set(dfm["trackName"].str.lower().str.strip())
-            never  = sum(1 for t in raw
-                         if str(t.get("track", t.get("trackName", ""))).lower().strip() not in played)
-            liked_pct        = min(len(raw) / max(dfm["trackName"].nunique(), 1) * 100, 100)
-            never_played_pct = never / len(raw) * 100 if raw else 0
+            liked_n  = len(raw)
+            played   = set(dfm["trackName"].str.lower().str.strip())
+            never    = sum(1 for t in raw
+                           if str(t.get("track", t.get("trackName", ""))).lower().strip() not in played)
+            liked_pct        = min(liked_n / max(dfm["trackName"].nunique(), 1) * 100, 100)
+            never_played_pct = never / liked_n * 100 if liked_n > 0 else 0
 
-    proj_new = int(dfm["artistName"].nunique() / max(dfm["year"].nunique(), 1))
+    first_seen    = dfm.groupby("artistName")["year"].min()
+    old_artists   = set(first_seen[first_seen <= yr_max - 5].index)
+    old_plays     = dfm[dfm["artistName"].isin(old_artists)]["ms"].sum()
+    old_music_pct = old_plays / total_ms * 100 if total_ms > 0 else 0
+
+    tracks_per_artist = dfm["trackName"].nunique() / max(unique_art, 1)
+
+    kids_peak_year = yr_max
+    if dfd is not None and not dfd.empty and "year" in dfd.columns:
+        kids_yearly    = dfd.groupby("year")["ms"].sum()
+        kids_peak_year = int(kids_yearly.idxmax()) if not kids_yearly.empty else yr_max
+
+    peak_hour = int(dfm.groupby("hour")["ms"].sum().idxmax()) if not dfm.empty else 18
 
     return {
-        "unique_artists":   dfm["artistName"].nunique(),
-        "sat_pct":          sat_ms / dfm["ms"].sum() * 100,
-        "sat_h":            sat_ms / 3600000,
-        "morning_pct":      morning_ms / dfm["ms"].sum() * 100,
-        "kids_pct":         kids_ms / total_all_ms * 100 if total_all_ms > 0 else 0,
-        "kids_h":           kids_ms / 3600000,
-        "top_plays":        int(track_top),
-        "top_artist_pct":   top_artist_pct,
-        "skip_rate":        skip_rate,
-        "binge_sessions":   binge_sessions,
-        "liked_pct":        liked_pct,
-        "never_played_pct": never_played_pct,
-        "proj_new":         proj_new,
+        "unique_artists":    unique_art,
+        "n_years":           n_years,
+        "oldest_year":       yr_min,
+        "peak_year":         peak_year,
+        "art_per_year":      unique_art / n_years,
+        "sat_pct":           sat_ms / total_ms * 100 if total_ms > 0 else 0,
+        "sat_h":             sat_ms / 3600000,
+        "morning_pct":       morning_ms / total_ms * 100 if total_ms > 0 else 0,
+        "night_pct":         night_ms / total_ms * 100 if total_ms > 0 else 0,
+        "night_h":           night_ms / 3600000,
+        "peak_hour":         peak_hour,
+        "kids_pct":          kids_ms / total_all_ms * 100 if total_all_ms > 0 else 0,
+        "kids_h":            kids_ms / 3600000,
+        "kids_peak_year":    kids_peak_year,
+        "top_plays":         int(track_top),
+        "top_artist":        top_artist,
+        "top_artist_pct":    top_artist_pct,
+        "top_artist_h":      top_artist_h,
+        "skip_rate":         skip_rate,
+        "completion_pct":    completion_pct,
+        "binge_sessions":    binge_sessions,
+        "shuffle_pct":       shuffle_pct,
+        "liked_pct":         liked_pct,
+        "liked_n":           liked_n,
+        "never_played_pct":  never_played_pct,
+        "proj_new":          int(unique_art / n_years),
+        "old_music_pct":     old_music_pct,
+        "tracks_per_artist": tracks_per_artist,
+        "total_plays":       len(dfm),
     }
 
+def _format(template, stats):
+    try:
+        return template.format(**stats)
+    except:
+        return template
+
 def render(dfm, dfd=None, lib=None):
-    st.title("Musical Horoscope")
-    st.markdown("*Your musical sign — derived from 12 years of actual behaviour, not vibes.*")
+    st.title("🔮 Musical Horoscope")
+    st.markdown("*Your musical sign — derived from actual behaviour, not vibes.*")
 
     if dfd is None:
         dfd = pd.DataFrame()
@@ -157,60 +256,7 @@ def render(dfm, dfd=None, lib=None):
     if not matched_sign:
         matched_sign = DEFAULT_SIGN
 
-    st.markdown(
-        "<div style='background:linear-gradient(135deg,#0a0a2a,#0a1a0a);"
-        "border:1px solid #7C3AED;border-radius:16px;padding:32px;"
-        "text-align:center;margin-bottom:24px;'>"
-        "<div style='font-size:4em;'>" + matched_sign.get("sign", "⭐") + "</div>"
-        "<div style='font-size:1.8em;font-weight:900;color:#A78BFA;margin-top:8px;'>"
-        + matched_sign["name"] + "</div>"
-        "<div style='color:#555;font-size:.85em;font-style:italic;margin-top:4px;'>"
-        + matched_sign.get("fr", "") + "</div>"
-        "</div>",
-        unsafe_allow_html=True
-    )
+    tab1, tab2 = st.tabs(["Your Sign", "All Signs"])
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("### Your Curse")
-        try:    curse = matched_sign["curse"].format(**stats)
-        except: curse = matched_sign["curse"]
-        st.markdown("<div class='insight'>" + curse + "</div>", unsafe_allow_html=True)
-
-        st.markdown("### Your Gift")
-        try:    gift = matched_sign["gift"].format(**stats)
-        except: gift = matched_sign["gift"]
-        st.markdown("<div class='insight'>" + gift + "</div>", unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("### Your Prediction")
-        try:    pred = matched_sign["prediction"].format(**stats)
-        except: pred = matched_sign["prediction"]
-        st.markdown("<div class='insight'>" + pred + "</div>", unsafe_allow_html=True)
-
-        st.markdown("### Your Numbers")
-        rows = [
-            ("Total artists",      str(stats["unique_artists"]) + " artists"),
-            ("Saturday share",     str(round(stats["sat_pct"])) + "%"),
-            ("Morning listening",  str(round(stats["morning_pct"])) + "%"),
-            ("Skip rate",          str(round(stats["skip_rate"])) + "%"),
-            ("Binge sessions",     str(stats["binge_sessions"]) + " sessions over 2h"),
-            ("Top track",          str(stats["top_plays"]) + " plays"),
-        ]
-        if stats["kids_pct"] > 1:
-            rows.append(("Children's content", str(round(stats["kids_pct"])) + "%"))
-        for lbl, val in rows:
-            st.markdown(
-                "<div style='display:flex;justify-content:space-between;"
-                "padding:5px 0;border-bottom:1px solid #222;font-size:.85em;'>"
-                "<span style='color:#888;'>" + lbl + "</span>"
-                "<span style='color:#fff;font-weight:700;'>" + val + "</span></div>",
-                unsafe_allow_html=True
-            )
-
-    st.markdown("---")
-    share = (matched_sign.get("sign", "") + " " + matched_sign["name"] +
-             " — my musical sign from 12 years of Spotify data. "
-             "Powered by MusicDNA. musicdna-dhalsimq.up.railway.app")
-    st.markdown("**Share your sign:**")
-    st.code(share)
+    with tab1:
+        st.markdown(
