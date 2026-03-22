@@ -269,7 +269,7 @@ def render(dfm, playlists):
         st.caption("Pairs sharing 40%+ of their artists. In rotation or on pause only, minimum 3 tracks.")
         candidates = df[
             (df["status"].isin(["Active", "Dormant"])) & (df["total_tracks"] >= 3)
-        ].reset_index(drop=True)
+        ].sort_values("pct_all", ascending=False).head(50).reset_index(drop=True)
         if len(candidates) < 2:
             st.info("Not enough playlists to find merge candidates.")
         else:
