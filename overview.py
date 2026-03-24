@@ -28,11 +28,11 @@ def percentile_label(val, bench, higher_is_better=True):
         if ratio <= 1.0:  return "Average", "#888"
         return "Below avg", "#f59e0b"
 
-def render(dfm, dfd, kids_on):
+def render(dfm, dfd, kids_on, lib=None, playlists=None):
     st.title("🏠 Your Musical Profile")
 
     import score
-    score.render(dfm)
+    score.render(dfm, dfd, lib, playlists)
 
     my_h    = dfm['ms'].sum() / 3600000
     my_art  = dfm['artistName'].nunique()
@@ -154,23 +154,75 @@ def render(dfm, dfd, kids_on):
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        st.markdown("## Your Eras — #1 Artist Per Year")
-        era_rows = []
-        for yr, grp in dfm.groupby('year'):
-            top = grp.groupby('artistName')['ms'].sum()
+        st.markdown("## Your Eras — What Each Year Meant")
+        sorted_years = sorted(dfm['year'].unique())
+        prev_top     = None
+        prev_hours   = None
+        era_rows     = []
+        first_seen_all = dfm.sort_values('ts').groupby('artistName')['year'].min()
+
+        for yr in sorted_years:
+            grp        = dfm[dfm['year'] == yr]
+            top        = grp.groupby('artistName')['ms'].sum()
+            top_artist_yr = top.idxmax()
+            hours      = round(grp['ms'].sum() / 3600000, 0)
+            top_hours  = top.max() / 3600000
+            concentration = top_hours / hours * 100 if hours > 0 else 0
+            skip_yr    = grp['skipped'].mean() * 100
+            new_this_year = int((first_seen_all == yr).sum())
+
+            parts = []
+            if prev_hours and hours > prev_hours * 1.4:
+                parts.append("Listening exploded")
+            elif prev_hours and hours < prev_hours * 0.6:
+                parts.append("You pulled back")
+            elif hours > 700:
+                parts.append("One of your biggest years")
+            elif hours < 200:
+                parts.append("A quiet year")
+
+            if prev_top and top_artist_yr == prev_top:
+                parts.append(top_artist_yr + " again — this was becoming something serious")
+            elif concentration > 30:
+                parts.append(top_artist_yr + " dominated (" + str(int(concentration)) + "% of the year)")
+            else:
+                parts.append(top_artist_yr + " led")
+
+            if new_this_year > 300:
+                parts.append(str(new_this_year) + " new artists discovered")
+            elif new_this_year < 50:
+                parts.append("focused, less exploratory")
+
+            if skip_yr > 35:
+                parts.append("restless year")
+            elif skip_yr < 10:
+                parts.append("very intentional")
+
+            narrative = ". ".join(parts[:2]) + "."
             era_rows.append({
-                'Year':    yr,
-                'Artist':  top.idxmax(),
-                'Hours':   round(top.max() / 3600000, 1),
-                'Total h': round(grp['ms'].sum() / 3600000, 0),
-                'Artists': grp['artistName'].nunique()
+                'year': yr, 'artist': top_artist_yr,
+                'hours': int(hours), 'narrative': narrative,
             })
-        era_df = (
-            pd.DataFrame(era_rows)
-            .sort_values('Year', ascending=False)
-            .set_index('Year')
-        )
-        st.dataframe(era_df, use_container_width=True)
+            prev_top   = top_artist_yr
+            prev_hours = hours
+
+        for row in sorted(era_rows, key=lambda x: -x['year']):
+            st.markdown(
+                "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
+                "border-left:3px solid " + VIOLET + ";border-radius:8px;"
+                "padding:12px 16px;margin-bottom:8px;'>"
+                "<div style='display:flex;justify-content:space-between;align-items:center;'>"
+                "<div style='font-size:1.1em;font-weight:900;color:#fff;'>"
+                + str(row['year']) + "</div>"
+                "<div style='color:#555;font-size:.75em;'>" + str(row['hours']) + "h</div>"
+                "</div>"
+                "<div style='font-weight:700;color:" + VIOLET_LIGHT + ";font-size:.88em;margin-top:3px;'>"
+                + str(row['artist']) + "</div>"
+                "<div style='color:#555;font-size:.78em;margin-top:4px;font-style:italic;'>"
+                + str(row['narrative']) + "</div>"
+                "</div>",
+                unsafe_allow_html=True
+            )
 
     st.markdown("---")
 
@@ -181,9 +233,9 @@ def render(dfm, dfd, kids_on):
         dfd_ym = dfd.groupby('ym')['ms'].sum().reset_index()
         dfd_ym.columns = ['ym', 'kids_ms']
         merged = dfm_ym.merge(dfd_ym, on='ym', how='outer').fillna(0)
-        merged['total'] = merged['music_ms'] + merged['kids_ms']
+        merged['total']    = merged['music_ms'] + merged['kids_ms']
         merged['kids_pct'] = merged['kids_ms'] / merged['total'] * 100
-        merged['ym_dt'] = pd.to_datetime(merged['ym'])
+        merged['ym_dt']    = pd.to_datetime(merged['ym'])
         merged = merged.sort_values('ym_dt')
 
         fig2 = go.Figure()
