@@ -33,15 +33,11 @@ handle_callback()
 
 for k, v in [('data_loaded', False), ('dfm', None), ('dfd', None),
               ('lib', {}), ('playlists', []), ('mode', None), ('dfp', None),
-              ('_page', 'Overview'), ('kids_on', False),
-              ('_cache_key', None)]:
+              ('_page', 'Overview'), ('kids_on', False), ('_cache_key', None)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ── Cache helpers ─────────────────────────────────────────────────────────────
-
 def _make_cache_key(token_data):
-    """Stable key from Spotify token — survives reruns and OAuth redirects."""
     if not token_data:
         return None
     raw = token_data.get('refresh_token', '') or token_data.get('access_token', '')
@@ -49,8 +45,6 @@ def _make_cache_key(token_data):
 
 @st.cache_data(show_spinner=False)
 def _cached_data(cache_key, zip1_bytes, zip2_bytes):
-    """Parse and cache zip data keyed by (cache_key, file hash).
-    Streamlit cache_data persists across reruns within the same server process."""
     return _parse_zips(zip1_bytes, zip2_bytes)
 
 def _get_cache_key():
@@ -58,15 +52,6 @@ def _get_cache_key():
     if tok:
         return _make_cache_key(tok)
     return None
-
-def _restore_from_cache(cache_key, zip1_bytes, zip2_bytes):
-    """Try to get cached data for this cache_key + file combo."""
-    try:
-        return _cached_data(cache_key, zip1_bytes, zip2_bytes)
-    except Exception:
-        return None
-
-# ── Zip parsing ───────────────────────────────────────────────────────────────
 
 def parse_ext(r):
     if not (r.get('master_metadata_track_name')
@@ -97,7 +82,6 @@ def parse_std(r):
     }
 
 def parse_podcast(r):
-    """Parse a podcast episode record from extended history."""
     uri = str(r.get('spotify_episode_uri', '') or r.get('spotify_track_uri', ''))
     if not uri.startswith('spotify:episode:'):
         return None
@@ -134,8 +118,7 @@ def make_podcast_df(records):
     return df
 
 def _parse_single_zip(data):
-    records, lib, playlists, mode = [], {}, [], None
-    podcasts_raw = []
+    records, lib, playlists, mode, podcasts_raw = [], {}, [], None, []
     with zipfile.ZipFile(io.BytesIO(data)) as z:
         names = z.namelist()
         ext = [n for n in names if 'Streaming_History_Audio_' in n and n.endswith('.json')]
@@ -169,7 +152,6 @@ def _parse_single_zip(data):
     return records, lib, playlists, mode, podcasts_raw
 
 def _parse_zips(zip1_bytes, zip2_bytes):
-    """Full parse — called by cache_data."""
     records, lib, playlists, mode, podcasts_raw = _parse_single_zip(zip1_bytes)
     if zip2_bytes:
         _, lib2, pl2, _, pod2 = _parse_single_zip(zip2_bytes)
@@ -191,18 +173,14 @@ def _parse_zips(zip1_bytes, zip2_bytes):
 def _load_into_session(parsed):
     if not parsed:
         return False
-    st.session_state.dfm       = parsed['dfm']
-    st.session_state.dfd       = parsed['dfd']
-    st.session_state.dfp       = parsed.get('dfp', pd.DataFrame())
-    st.session_state.lib       = parsed['lib']
-    st.session_state.playlists = parsed['playlists']
-    st.session_state.mode      = parsed['mode']
+    st.session_state.dfm        = parsed['dfm']
+    st.session_state.dfd        = parsed['dfd']
+    st.session_state.dfp        = parsed.get('dfp', pd.DataFrame())
+    st.session_state.lib        = parsed['lib']
+    st.session_state.playlists  = parsed['playlists']
+    st.session_state.mode       = parsed['mode']
     st.session_state.data_loaded = True
     return True
-
-# ── Auto-restore from cache on OAuth return ───────────────────────────────────
-# If session was wiped by OAuth redirect but cache_data still holds the parsed data,
-# restore it automatically using the stored file bytes in session.
 
 if (not st.session_state.data_loaded
         and is_authenticated()
@@ -216,11 +194,11 @@ if (not st.session_state.data_loaded
         _load_into_session(cached)
         st.rerun()
 
-SECTION_YOUR_STORY   = ["Overview", "Musical Horoscope", "Celebrity Twin"]
-SECTION_DEEP_DIVES   = ["Artists and Tracks", "Likes Autopsy", "Playlist Autopsy", "Time Patterns", "Podcast Autopsy"]
-SECTION_FORGOTTEN    = ["Forgotten", "Explore"]
-SECTION_DARK_SIDE    = ["Hall of Shame", "Parent Mode"]
-PAGES_FULL_DNA       = ["Genre Profile"]
+SECTION_YOUR_STORY = ["Overview", "Musical Horoscope", "Celebrity Twin"]
+SECTION_DEEP_DIVES = ["Artists and Tracks", "Likes Autopsy", "Playlist Autopsy", "Time Patterns", "Podcast Autopsy"]
+SECTION_FORGOTTEN  = ["Forgotten", "Explore"]
+SECTION_DARK_SIDE  = ["Hall of Shame", "Parent Mode"]
+PAGES_FULL_DNA     = ["Genre Profile"]
 
 PAGES_BASE = (
     SECTION_YOUR_STORY +
@@ -228,8 +206,6 @@ PAGES_BASE = (
     SECTION_FORGOTTEN  +
     SECTION_DARK_SIDE
 )
-
-# ── SIDEBAR ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
     st.markdown(
@@ -262,8 +238,7 @@ with st.sidebar:
                 "<div style='color:#A78BFA;font-size:.78em;font-weight:700;margin-bottom:4px;'>"
                 "Unlock Full DNA</div>"
                 "<div style='color:#555;font-size:.76em;line-height:1.6;'>"
-                "Upload your Extended History zip to add 9 deep analyses, "
-                "Taste Drift and Audio Profile."
+                "Upload your Extended History zip to add 9 deep analyses and Genre Profile."
                 "</div></div>",
                 unsafe_allow_html=True
             )
@@ -294,7 +269,6 @@ with st.sidebar:
                 with st.spinner("Loading your history..."):
                     zip1_bytes = zip1.read()
                     zip2_bytes = zip2.read() if zip2 else None
-                    # store bytes in session for post-OAuth restore
                     st.session_state['_zip1_bytes'] = zip1_bytes
                     st.session_state['_zip2_bytes'] = zip2_bytes
                     cache_key = _get_cache_key() or 'anon'
@@ -320,16 +294,17 @@ with st.sidebar:
 
         has_likes     = bool(lib_.get('tracks')) if isinstance(lib_, dict) else bool(lib_)
         has_playlists = bool(st.session_state.playlists)
-        if not has_likes:
-            st.warning("No likes — upload standard zip")
-        if not has_playlists:
-            st.warning("No playlists — upload standard zip")
+        if not has_likes:     st.warning("No likes — upload standard zip")
+        if not has_playlists: st.warning("No playlists — upload standard zip")
 
         st.markdown("---")
         if st.button("Load new file", use_container_width=True):
             for k in ['data_loaded','dfm','dfd','lib','playlists','mode',
-                      '_zip1_bytes','_zip2_bytes']:
-                st.session_state[k] = False if k=='data_loaded' else ({} if k=='lib' else ([] if k=='playlists' else None))
+                      '_zip1_bytes','_zip2_bytes','dfp',
+                      'quiz_done','gap_shown','quiz_artist_save',
+                      'quiz_style_save','quiz_time_save']:
+                st.session_state[k] = False if k in ['data_loaded','quiz_done','gap_shown'] else (
+                    {} if k=='lib' else ([] if k=='playlists' else None))
             st.rerun()
 
         st.markdown("---")
@@ -339,12 +314,12 @@ with st.sidebar:
             nav_pages += PAGES_FULL_DNA
 
         section_map = {}
-        for p in SECTION_YOUR_STORY: section_map[p] = ("Your story", "#555")
-        for p in SECTION_DEEP_DIVES:  section_map[p] = ("Deep dives", "#555")
-        for p in SECTION_FORGOTTEN:   section_map[p] = ("What you forgot", "#555")
-        for p in SECTION_DARK_SIDE:   section_map[p] = ("The dark side", "#555")
+        for p in SECTION_YOUR_STORY: section_map[p] = ("Your story",      "#555")
+        for p in SECTION_DEEP_DIVES: section_map[p] = ("Deep dives",      "#555")
+        for p in SECTION_FORGOTTEN:  section_map[p] = ("What you forgot", "#555")
+        for p in SECTION_DARK_SIDE:  section_map[p] = ("The dark side",   "#555")
         if is_authenticated():
-            for p in PAGES_FULL_DNA:  section_map[p] = ("Full DNA", "#1DB954")
+            for p in PAGES_FULL_DNA: section_map[p] = ("Full DNA",        "#1DB954")
 
         current_section = ""
         for p in nav_pages:
@@ -369,8 +344,6 @@ with st.sidebar:
             + str(round(dfm_['ms'].sum() / 3600000)) + "h"
         )
 
-# ── ROUTING ───────────────────────────────────────────────────────────────────
-
 page = st.session_state.get('_page', 'Overview')
 
 if not st.session_state.data_loaded and not is_authenticated():
@@ -394,16 +367,16 @@ dfp       = st.session_state.get('dfp', pd.DataFrame())
 kids_on   = st.session_state.get('kids_on', False)
 df        = pd.concat([dfm, dfd]) if (kids_on and dfd is not None and not dfd.empty) else dfm
 
-if   "Overview"          in page: import overview;         overview.render(dfm, dfd, kids_on)
-elif "Musical Horoscope" in page: import horoscope;        horoscope.render(dfm, dfd, lib)
-elif "Likes Autopsy"     in page: import likes_autopsy;    likes_autopsy.render(dfm, lib)
-elif "Playlist Autopsy"  in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
-elif "Explore"           in page: import discovery;        discovery.render(dfm)
-elif "Forgotten"         in page: import forgotten;        forgotten.render(dfm)
-elif "Hall of Shame"     in page: import hall_of_shame;    hall_of_shame.render(dfm, lib, playlists)
-elif "Parent Mode"       in page: import parent_mode;      parent_mode.render(dfm, dfd, [])
-elif "Celebrity Twin"    in page: import celebrity_twin;   celebrity_twin.render(dfm)
-elif "Artists and Tracks"in page: import artists;          artists.render(df)
-elif "Time Patterns"     in page: import time_patterns;    time_patterns.render(df)
-elif "Podcast Autopsy"   in page: import podcast_autopsy;  podcast_autopsy.render(dfp)
-elif "Genre Profile"     in page: import audio_profile;    audio_profile.render(dfm)
+if   "Overview"           in page: import overview;         overview.render(dfm, dfd, kids_on, lib, playlists)
+elif "Musical Horoscope"  in page: import horoscope;        horoscope.render(dfm, dfd, lib, playlists)
+elif "Likes Autopsy"      in page: import likes_autopsy;    likes_autopsy.render(dfm, lib)
+elif "Playlist Autopsy"   in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
+elif "Explore"            in page: import explore;          explore.render(dfm)
+elif "Forgotten"          in page: import forgotten;        forgotten.render(dfm)
+elif "Hall of Shame"      in page: import hall_of_shame;    hall_of_shame.render(dfm, lib, playlists)
+elif "Parent Mode"        in page: import parent_mode;      parent_mode.render(dfm, dfd, [])
+elif "Celebrity Twin"     in page: import celebrity_twin;   celebrity_twin.render(dfm)
+elif "Artists and Tracks" in page: import artists;          artists.render(df)
+elif "Time Patterns"      in page: import time_patterns;    time_patterns.render(df)
+elif "Podcast Autopsy"    in page: import podcast_autopsy;  podcast_autopsy.render(dfp)
+elif "Genre Profile"      in page: import audio_profile;    audio_profile.render(dfm)
