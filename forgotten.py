@@ -7,6 +7,7 @@ VIOLET_LIGHT = "#A78BFA"
 GREEN        = "#1DB954"
 AMBER        = "#f59e0b"
 RED          = "#f87171"
+BLUE         = "#60a5fa"
 
 def _card(content, border=VIOLET):
     st.markdown(
@@ -16,41 +17,53 @@ def _card(content, border=VIOLET):
         unsafe_allow_html=True
     )
 
-def _insight(text):
+def _tab_intro(title, desc):
     st.markdown(
-        "<div class='insight'>" + text + "</div>",
+        "<div style='margin-bottom:16px;'>"
+        "<div style='font-size:1.1em;font-weight:900;color:#fff;margin-bottom:4px;'>"
+        + title + "</div>"
+        "<div style='color:#888;font-size:.82em;line-height:1.6;'>"
+        + desc + "</div>"
+        "</div>",
         unsafe_allow_html=True
     )
 
 def render(dfm):
-    st.title("Forgotten")
-    st.markdown("*What you used to love. What you should revisit.*")
+    st.title("🕳 Forgotten")
+    st.markdown(
+        "<div style='color:#888;font-size:.88em;margin-bottom:20px;'>"
+        "Five different ways to look at what you left behind."
+        "</div>",
+        unsafe_allow_html=True
+    )
 
     if dfm is None or dfm.empty:
         st.warning("Upload your Extended History zip to enable this analysis.")
         return
 
-    cutoff_1y  = dfm["ts"].max() - pd.DateOffset(years=1)
-    cutoff_2y  = dfm["ts"].max() - pd.DateOffset(years=2)
+    cutoff_1y = dfm["ts"].max() - pd.DateOffset(years=1)
+    cutoff_2y = dfm["ts"].max() - pd.DateOffset(years=2)
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "Forgotten Hits",
-        "Obsessions",
-        "Never Skipped",
-        "Lost Artists",
-        "Time Capsules",
+        "🔇 Forgotten Hits",
+        "🌀 Obsessions",
+        "✅ Never Skipped",
+        "👋 Lost Artists",
+        "📸 Time Capsules",
     ])
 
     # ── Tab 1: Forgotten Hits ─────────────────────────────────────────────────
     with tab1:
-        st.markdown("### Tracks you used to play — silent for 12+ months")
-        st.caption("Minimum 20 plays all-time. Nothing in the last 12 months.")
+        _tab_intro(
+            "Tracks you used to play — now silent",
+            "20+ plays all-time. Zero plays in the last 12 months. "
+            "These were part of your life. Something made you stop."
+        )
 
         track_stats = dfm.groupby(["trackName", "artistName"]).agg(
             plays       =("ms", "count"),
             last_played =("ts", "max"),
             first_played=("ts", "min"),
-            skips       =("skipped", "sum") if "skipped" in dfm.columns else ("ms", lambda x: 0),
         ).reset_index()
 
         forgotten = track_stats[
@@ -61,21 +74,25 @@ def render(dfm):
         if forgotten.empty:
             st.info("No forgotten hits found.")
         else:
-            st.markdown("<b style='color:#fff;'>" + str(len(forgotten)) + " tracks:</b>", unsafe_allow_html=True)
+            st.markdown(
+                "<div style='color:#aaa;font-size:.82em;margin-bottom:12px;'>"
+                + str(len(forgotten)) + " tracks found</div>",
+                unsafe_allow_html=True
+            )
             cols = st.columns(2)
             for i, (_, row) in enumerate(forgotten.iterrows()):
-                last = row["last_played"].strftime("%b %Y")
+                last    = row["last_played"].strftime("%b %Y")
                 silence = int((dfm["ts"].max() - row["last_played"]).days / 30)
                 with cols[i % 2]:
                     _card(
                         "<div style='font-weight:700;color:#fff;font-size:.9em;'>"
                         + str(row["trackName"]) + "</div>"
-                        "<div style='color:#555;font-size:.78em;margin-top:3px;'>"
+                        "<div style='color:#888;font-size:.78em;margin-top:3px;'>"
                         + str(row["artistName"]) + "</div>"
                         "<div style='display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;'>"
                         "<span style='color:#A78BFA;font-weight:700;font-size:.78em;'>"
                         + str(int(row["plays"])) + " plays</span>"
-                        "<span style='color:#555;font-size:.78em;'>last: " + last + "</span>"
+                        "<span style='color:#888;font-size:.78em;'>last: " + last + "</span>"
                         "<span style='color:#f87171;font-size:.78em;'>"
                         + str(silence) + " months of silence</span>"
                         "</div>",
@@ -84,42 +101,38 @@ def render(dfm):
 
     # ── Tab 2: Obsessions ─────────────────────────────────────────────────────
     with tab2:
-        st.markdown("### Past obsessions — intense bursts, then nothing")
-        st.caption("10+ plays concentrated in under 90 days, then dropped. Sorted by intensity.")
+        _tab_intro(
+            "Intense bursts — then nothing",
+            "10+ plays concentrated in under 90 days, then completely dropped. "
+            "Not gradual drift — a sudden stop. "
+            "Different from Forgotten Hits: these were consumed obsessively, not casually."
+        )
 
         track_ts = dfm.copy()
         track_ts["key"] = track_ts["trackName"] + "|||" + track_ts["artistName"]
 
         obsessions = []
         for key, grp in track_ts.groupby("key"):
-            if len(grp) < 10:
-                continue
-            grp_s = grp.sort_values("ts")
-            first = grp_s["ts"].iloc[0]
-            last  = grp_s["ts"].iloc[-1]
+            if len(grp) < 10: continue
+            grp_s     = grp.sort_values("ts")
+            first     = grp_s["ts"].iloc[0]
+            last      = grp_s["ts"].iloc[-1]
             span_days = (last - first).days
-            if span_days == 0:
-                continue
-            # find peak window: max plays in any 90-day window
+            if span_days == 0: continue
             peak_plays = 0
             peak_start = None
-            for idx, row_ts in grp_s.iterrows():
+            for _, row_ts in grp_s.iterrows():
                 window_end   = row_ts["ts"] + pd.DateOffset(days=90)
                 window_plays = ((grp_s["ts"] >= row_ts["ts"]) & (grp_s["ts"] <= window_end)).sum()
                 if window_plays > peak_plays:
-                    peak_plays  = window_plays
-                    peak_start  = row_ts["ts"]
-            if peak_plays < 10:
-                continue
-            # must be silent for last 12 months
-            if last >= cutoff_1y:
-                continue
+                    peak_plays = window_plays
+                    peak_start = row_ts["ts"]
+            if peak_plays < 10: continue
+            if last >= cutoff_1y: continue
             parts = key.split("|||")
-            track_name  = parts[0]
-            artist_name = parts[1] if len(parts) > 1 else ""
             obsessions.append({
-                "track":       track_name,
-                "artist":      artist_name,
+                "track":       parts[0],
+                "artist":      parts[1] if len(parts) > 1 else "",
                 "total_plays": len(grp),
                 "peak_plays":  int(peak_plays),
                 "peak_start":  peak_start,
@@ -132,7 +145,11 @@ def render(dfm):
         if not obsessions:
             st.info("No past obsessions detected.")
         else:
-            st.markdown("<b style='color:#fff;'>" + str(len(obsessions)) + " obsessions:</b>", unsafe_allow_html=True)
+            st.markdown(
+                "<div style='color:#aaa;font-size:.82em;margin-bottom:12px;'>"
+                + str(len(obsessions)) + " obsessions found</div>",
+                unsafe_allow_html=True
+            )
             cols = st.columns(2)
             for i, o in enumerate(obsessions):
                 peak_label = o["peak_start"].strftime("%b %Y") if o["peak_start"] else "unknown"
@@ -141,21 +158,25 @@ def render(dfm):
                     _card(
                         "<div style='font-weight:700;color:#fff;font-size:.9em;'>"
                         + str(o["track"]) + "</div>"
-                        "<div style='color:#555;font-size:.78em;margin-top:3px;'>"
+                        "<div style='color:#888;font-size:.78em;margin-top:3px;'>"
                         + str(o["artist"]) + "</div>"
                         "<div style='display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;'>"
                         "<span style='color:#f59e0b;font-weight:700;font-size:.78em;'>"
                         + str(o["peak_plays"]) + "x in 90 days</span>"
-                        "<span style='color:#555;font-size:.78em;'>peak: " + peak_label + "</span>"
-                        "<span style='color:#444;font-size:.78em;'>last: " + last_label + "</span>"
+                        "<span style='color:#888;font-size:.78em;'>peak: " + peak_label + "</span>"
+                        "<span style='color:#555;font-size:.78em;'>last: " + last_label + "</span>"
                         "</div>",
                         border=AMBER
                     )
 
     # ── Tab 3: Never Skipped ──────────────────────────────────────────────────
     with tab3:
-        st.markdown("### Tracks you never skipped — but stopped playing")
-        st.caption("0% skip rate on 5+ plays. Silent for the last 12 months. These deserve a comeback.")
+        _tab_intro(
+            "Tracks you never skipped — but stopped playing",
+            "0% skip rate on 5+ plays, silent for 12+ months. "
+            "You loved these unconditionally. Then you left without a reason. "
+            "Different from the others: the skipping data proves the appreciation was real."
+        )
 
         if "skipped" not in dfm.columns:
             st.info("Skip data not available — requires Extended History export.")
@@ -175,23 +196,27 @@ def render(dfm):
             if never_skipped.empty:
                 st.info("No never-skipped forgotten tracks found.")
             else:
-                st.markdown("<b style='color:#fff;'>" + str(len(never_skipped)) + " tracks:</b>", unsafe_allow_html=True)
+                st.markdown(
+                    "<div style='color:#aaa;font-size:.82em;margin-bottom:12px;'>"
+                    + str(len(never_skipped)) + " tracks found</div>",
+                    unsafe_allow_html=True
+                )
                 cols = st.columns(2)
                 for i, (_, row) in enumerate(never_skipped.iterrows()):
-                    last = row["last_played"].strftime("%b %Y")
+                    last    = row["last_played"].strftime("%b %Y")
                     silence = int((dfm["ts"].max() - row["last_played"]).days / 30)
                     with cols[i % 2]:
                         _card(
                             "<div style='font-weight:700;color:#fff;font-size:.9em;'>"
                             + str(row["trackName"]) + "</div>"
-                            "<div style='color:#555;font-size:.78em;margin-top:3px;'>"
+                            "<div style='color:#888;font-size:.78em;margin-top:3px;'>"
                             + str(row["artistName"]) + "</div>"
                             "<div style='display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;'>"
                             "<span style='color:" + GREEN + ";font-weight:700;font-size:.78em;'>0% skip</span>"
                             "<span style='color:#A78BFA;font-size:.78em;'>"
                             + str(int(row["plays"])) + " plays</span>"
-                            "<span style='color:#555;font-size:.78em;'>last: " + last + "</span>"
-                            "<span style='color:#444;font-size:.78em;'>"
+                            "<span style='color:#888;font-size:.78em;'>last: " + last + "</span>"
+                            "<span style='color:#555;font-size:.78em;'>"
                             + str(silence) + " months ago</span>"
                             "</div>",
                             border=GREEN
@@ -199,8 +224,12 @@ def render(dfm):
 
     # ── Tab 4: Lost Artists ───────────────────────────────────────────────────
     with tab4:
-        st.markdown("### Artists you walked away from")
-        st.caption("50+ plays all-time. Nothing in the last 12 months. When did it stop?")
+        _tab_intro(
+            "Artists you walked away from",
+            "50+ plays all-time, nothing in the last 12 months. "
+            "Not individual tracks — entire artists that disappeared from your life. "
+            "The timeline shows when the relationship started and when it ended."
+        )
 
         artist_stats = dfm.groupby("artistName").agg(
             plays       =("ms", "count"),
@@ -217,9 +246,12 @@ def render(dfm):
         if lost.empty:
             st.info("No lost artists found.")
         else:
-            st.markdown("<b style='color:#fff;'>" + str(len(lost)) + " artists:</b>", unsafe_allow_html=True)
+            st.markdown(
+                "<div style='color:#aaa;font-size:.82em;margin-bottom:12px;'>"
+                + str(len(lost)) + " artists found</div>",
+                unsafe_allow_html=True
+            )
 
-            # timeline chart
             fig = go.Figure()
             for _, row in lost.head(15).iterrows():
                 fig.add_trace(go.Scatter(
@@ -230,7 +262,7 @@ def render(dfm):
                     marker=dict(size=8, color=[GREEN, RED]),
                     showlegend=False,
                     hovertemplate=str(row["artistName"]) + "<br>"
-                        + str(int(row["plays"])) + " plays<br>"
+                        + str(int(row["plays"])) + " plays · "
                         + str(row["hours"]) + "h<extra></extra>"
                 ))
             fig.update_layout(
@@ -244,8 +276,8 @@ def render(dfm):
 
             cols = st.columns(2)
             for i, (_, row) in enumerate(lost.iterrows()):
-                first = row["first_played"].strftime("%b %Y")
-                last  = row["last_played"].strftime("%b %Y")
+                first   = row["first_played"].strftime("%b %Y")
+                last    = row["last_played"].strftime("%b %Y")
                 silence = int((dfm["ts"].max() - row["last_played"]).days / 30)
                 with cols[i % 2]:
                     _card(
@@ -254,9 +286,9 @@ def render(dfm):
                         "<div style='display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;'>"
                         "<span style='color:#A78BFA;font-weight:700;font-size:.78em;'>"
                         + str(int(row["plays"])) + " plays</span>"
-                        "<span style='color:#555;font-size:.78em;'>"
+                        "<span style='color:#888;font-size:.78em;'>"
                         + str(row["hours"]) + "h total</span>"
-                        "<span style='color:#555;font-size:.78em;'>"
+                        "<span style='color:#888;font-size:.78em;'>"
                         + first + " → " + last + "</span>"
                         "<span style='color:#f87171;font-size:.78em;'>"
                         + str(silence) + " months of silence</span>"
@@ -266,31 +298,32 @@ def render(dfm):
 
     # ── Tab 5: Time Capsules ──────────────────────────────────────────────────
     with tab5:
-        st.markdown("### Time capsule tracks — only existed in one window of your life")
-        st.caption("Played only within a 6-month window. Never before, never after. A snapshot of who you were.")
+        _tab_intro(
+            "Tracks that only existed in one window of your life",
+            "5+ plays, all within a 6-month window, never before or after. "
+            "Not abandoned — contained. A snapshot of a specific moment. "
+            "Different from Obsessions: these were never intense, just consistently present — then gone."
+        )
 
         track_ts2 = dfm.copy()
         track_ts2["key"] = track_ts2["trackName"] + "|||" + track_ts2["artistName"]
 
         capsules = []
         for key, grp in track_ts2.groupby("key"):
-            if len(grp) < 5:
-                continue
+            if len(grp) < 5: continue
             first = grp["ts"].min()
             last  = grp["ts"].max()
             span  = (last - first).days
-            if span > 180:
-                continue
-            if last >= cutoff_1y:
-                continue
+            if span > 180: continue
+            if last >= cutoff_1y: continue
             parts = key.split("|||")
             capsules.append({
-                "track":   parts[0],
-                "artist":  parts[1] if len(parts) > 1 else "",
-                "plays":   len(grp),
-                "first":   first,
-                "last":    last,
-                "span":    span,
+                "track":  parts[0],
+                "artist": parts[1] if len(parts) > 1 else "",
+                "plays":  len(grp),
+                "first":  first,
+                "last":   last,
+                "span":   span,
             })
 
         capsules = sorted(capsules, key=lambda x: -x["plays"])[:40]
@@ -298,7 +331,11 @@ def render(dfm):
         if not capsules:
             st.info("No time capsule tracks found.")
         else:
-            st.markdown("<b style='color:#fff;'>" + str(len(capsules)) + " tracks:</b>", unsafe_allow_html=True)
+            st.markdown(
+                "<div style='color:#aaa;font-size:.82em;margin-bottom:12px;'>"
+                + str(len(capsules)) + " capsules found</div>",
+                unsafe_allow_html=True
+            )
             cols = st.columns(2)
             for i, c in enumerate(capsules):
                 period = c["first"].strftime("%b %Y") + " → " + c["last"].strftime("%b %Y")
@@ -306,14 +343,14 @@ def render(dfm):
                     _card(
                         "<div style='font-weight:700;color:#fff;font-size:.9em;'>"
                         + str(c["track"]) + "</div>"
-                        "<div style='color:#555;font-size:.78em;margin-top:3px;'>"
+                        "<div style='color:#888;font-size:.78em;margin-top:3px;'>"
                         + str(c["artist"]) + "</div>"
                         "<div style='display:flex;gap:12px;margin-top:6px;flex-wrap:wrap;'>"
-                        "<span style='color:#60a5fa;font-weight:700;font-size:.78em;'>"
+                        "<span style='color:" + BLUE + ";font-weight:700;font-size:.78em;'>"
                         + str(c["plays"]) + " plays</span>"
-                        "<span style='color:#555;font-size:.78em;'>" + period + "</span>"
-                        "<span style='color:#444;font-size:.78em;'>"
-                        + str(c["span"]) + " days window</span>"
+                        "<span style='color:#888;font-size:.78em;'>" + period + "</span>"
+                        "<span style='color:#555;font-size:.78em;'>"
+                        + str(c["span"]) + " day window</span>"
                         "</div>",
-                        border="#60a5fa"
+                        border=BLUE
                     )
