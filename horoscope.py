@@ -70,19 +70,17 @@ def _gap_analysis(s):
 
     gaps = []
 
-    # ── Artist gap ────────────────────────────────────────────────────────
     real_artist = str(s.get('top_artist', ''))
     confirmed   = quiz_artist.strip().lower() == real_artist.lower() if quiz_artist.strip() else False
     gaps.append({
-        "label":    "Your #1 artist",
-        "you_said": quiz_artist.strip() or "—",
+        "label":     "Your #1 artist",
+        "you_said":  quiz_artist.strip() or "—",
         "data_says": real_artist + " (" + str(round(s.get('top_artist_h', 0))) + "h)",
-        "verdict":  "You know yourself. Rare." if confirmed else
-                    "You said one name. Your data said another. That gap is the whole point of this app.",
+        "verdict":   "You know yourself. Rare." if confirmed else
+                     "You said one name. Your data said another. That gap is the whole point of this app.",
         "ok": confirmed,
     })
 
-    # ── Style gap ─────────────────────────────────────────────────────────
     style_map = {
         "Explorer — I'm always finding new things":    ("explorer", s.get('art_per_year', 0) > 150),
         "Loyalist — I know what I like and I go deep": ("loyalist", s.get('old_music_pct', 0) > 50),
@@ -104,14 +102,13 @@ def _gap_analysis(s):
                     ("Genuinely eclectic." if style_ok else "Wide but shallow. The Fake Eclectic is calling."),
     }
     gaps.append({
-        "label":    "Your listening style",
-        "you_said": quiz_style.split(" — ")[0] if " — " in quiz_style else quiz_style,
+        "label":     "Your listening style",
+        "you_said":  quiz_style.split(" — ")[0] if " — " in quiz_style else quiz_style,
         "data_says": style_reality.get(style_key, "Data says it's complicated."),
-        "verdict":  "Confirmed." if style_ok else "Your data disagrees.",
+        "verdict":   "Confirmed." if style_ok else "Your data disagrees.",
         "ok": style_ok,
     })
 
-    # ── Time gap ──────────────────────────────────────────────────────────
     peak_h = s.get('peak_hour', 18)
     time_map = {
         "Morning (before 9am)": 5 <= peak_h <= 8,
@@ -119,17 +116,16 @@ def _gap_analysis(s):
         "Evening (6pm-10pm)":   18 <= peak_h <= 21,
         "Night (after 10pm)":   peak_h >= 22 or peak_h <= 4,
     }
-    time_key  = quiz_time.split(" (")[0] if " (" in quiz_time else quiz_time
-    time_ok   = time_map.get(quiz_time, False)
+    time_key = quiz_time.split(" (")[0] if " (" in quiz_time else quiz_time
+    time_ok  = time_map.get(quiz_time, False)
     gaps.append({
-        "label":    "When you listen",
-        "you_said": time_key,
+        "label":     "When you listen",
+        "you_said":  time_key,
         "data_says": str(peak_h).zfill(2) + "h is your actual peak hour.",
-        "verdict":  "Confirmed." if time_ok else "Your peak hour tells a different story.",
+        "verdict":   "Confirmed." if time_ok else "Your peak hour tells a different story.",
         "ok": time_ok,
     })
 
-    # ── Render ────────────────────────────────────────────────────────────
     st.markdown(
         "<div style='color:#A78BFA;font-size:.72em;font-weight:700;"
         "text-transform:uppercase;letter-spacing:.1em;margin:20px 0 12px;'>"
@@ -169,12 +165,10 @@ def render(dfm, dfd=None, lib=None, playlists=None):
 
     arch = s['archetype']
 
-    # ── Quiz gate ──────────────────────────────────────────────────────────
     if not st.session_state.get('quiz_done', False):
         _quiz()
         st.stop()
 
-    # ── Gap analysis (once per session) ───────────────────────────────────
     if not st.session_state.get('gap_shown', False):
         _gap_analysis(s)
         st.session_state['gap_shown'] = True
