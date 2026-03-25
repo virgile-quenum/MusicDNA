@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 from collections import defaultdict
 
 VIOLET       = "#7C3AED"
@@ -11,6 +10,16 @@ GREEN        = "#1DB954"
 AMBER        = "#f59e0b"
 RED          = "#f87171"
 BLUE         = "#60a5fa"
+
+KIDS_KW = [
+    'bébé','baby','lullaby','titounis','mancebo','bernardo','celesti',
+    'mclaughlin','moons','kiboomers','teddy','wonderland','comptines',
+    'petit ours','ainsi font','percussioney','batukem','tukada',
+    'música para bebés','musique pour bébé','alain royer','miracle tones',
+    'monde des titounis','comptines tv','arlen ness','carmen campagne',
+]
+
+def _is_kids(n): return any(k in n.lower() for k in KIDS_KW)
 
 # ── Event detection ───────────────────────────────────────────────────────────
 
@@ -48,13 +57,9 @@ def _detect_silence(df):
     avg = monthly.mean()
     std = monthly.std()
     events = []
-
-    # Find sustained low periods (3+ consecutive months below avg - std)
     low_months = monthly[monthly < avg - std]
     if len(low_months) == 0:
         return events
-
-    # Group consecutive low months
     periods = []
     current = []
     all_months = sorted(monthly.index.tolist())
@@ -67,7 +72,6 @@ def _detect_silence(df):
             current = []
     if len(current) >= 2:
         periods.append(current)
-
     for period in periods[:2]:
         yr = int(period[0][:4])
         total_h = sum(monthly.get(m, 0) for m in period)
@@ -88,17 +92,10 @@ def _detect_silence(df):
     return events
 
 def _detect_artist_abandonment(df):
-    kids_kw = ['bébé','baby','lullaby','titounis','mancebo','bernardo','celesti',
-               'mclaughlin','moons','kiboomers','teddy','wonderland','comptines',
-               'petit ours','ainsi font','percussioney','batukem','tukada',
-               'música para bebés','musique pour bébé']
-    def is_kids(n): return any(k in n.lower() for k in kids_kw)
-
-    df_c = df[~df['artistName'].apply(is_kids)]
+    df_c = df[~df['artistName'].apply(_is_kids)]
     yr_max = int(df_c['year'].max())
     artist_years = df_c.groupby('artistName')['year'].agg(['min','max'])
     artist_h = df_c.groupby('artistName')['ms'].sum() / 3600000
-
     events = []
     for artist, row in artist_years.iterrows():
         h = artist_h.get(artist, 0)
@@ -162,11 +159,10 @@ def _detect_time_shift(df):
         if len(grp) < 200: continue
         peak = int(grp.groupby('hour')['ms'].sum().idxmax())
         yearly_peak[yr] = peak
-
     years = sorted(yearly_peak.keys())
     for i in range(2, len(years)):
-        prev2 = [yearly_peak[years[i-2]], yearly_peak[years[i-1]]]
-        curr  = yearly_peak[years[i]]
+        prev2    = [yearly_peak[years[i-2]], yearly_peak[years[i-1]]]
+        curr     = yearly_peak[years[i]]
         avg_prev = sum(prev2) / 2
         if abs(curr - avg_prev) >= 4:
             direction = "earlier" if curr < avg_prev else "later"
@@ -186,26 +182,19 @@ def _detect_time_shift(df):
     return events[:2]
 
 def _detect_style_shift(df):
-    """Detect dominant style changes year over year using artist name patterns."""
-    kids_kw = ['bébé','baby','lullaby','titounis','mancebo','bernardo','celesti',
-               'mclaughlin','moons','kiboomers','teddy','wonderland','comptines',
-               'petit ours','ainsi font','percussioney','batukem','tukada',
-               'música para bebés']
-    def is_kids(n): return any(k in n.lower() for k in kids_kw)
-    df_c = df[~df['artistName'].apply(is_kids)]
-
-    # Top artist per year as style proxy
+    df_c = df[~df['artistName'].apply(_is_kids)]
     events = []
     prev_top = None
     for yr in sorted(df_c['year'].unique()):
         grp = df_c[df_c['year'] == yr]
         if grp['ms'].sum() < 50_000_000: continue
-        top = grp.groupby('artistName')['ms'].sum().nlargest(1)
+        top      = grp.groupby('artistName')['ms'].sum().nlargest(1)
         curr_top = top.index[0]
         curr_h   = round(top.iloc[0] / 3600000, 0)
         if prev_top and curr_top != prev_top:
-            # New dominant artist
-            prev_h = round(df_c[(df_c['year'] == yr-1) & (df_c['artistName'] == prev_top)]['ms'].sum() / 3600000, 0)
+            prev_h = round(
+                df_c[(df_c['year'] == yr-1) & (df_c['artistName'] == prev_top)]['ms'].sum() / 3600000, 0
+            )
             if curr_h > 10 and prev_h > 5:
                 events.append({
                     'date': str(yr) + '-01', 'year': yr,
@@ -225,23 +214,17 @@ def _detect_style_shift(df):
 def _detect_parenthood(df, dfd):
     if dfd is None or dfd.empty: return []
     if 'ym' not in dfd.columns: return []
-
     kids_monthly = dfd.groupby('ym')['ms'].sum() / 3600000
     if kids_monthly.empty: return []
-
     first_month = kids_monthly[kids_monthly > 1].index.min()
     if not first_month: return []
-
     yr = int(first_month[:4])
     mo = int(first_month[5:7])
-    month_name = pd.Timestamp(year=yr, month=mo, day=1).strftime('%B %Y')
+    month_name   = pd.Timestamp(year=yr, month=mo, day=1).strftime('%B %Y')
     total_kids_h = round(kids_monthly.sum())
-
-    # Find peak kids month
     peak_ym = kids_monthly.idxmax()
     peak_h  = round(kids_monthly.max())
     peak_mo = pd.Timestamp(year=int(peak_ym[:4]), month=int(peak_ym[5:7]), day=1).strftime('%B %Y')
-
     return [{
         'date': first_month, 'year': yr,
         'type': 'parenthood', 'color': '#f472b6', 'icon': '👶',
@@ -255,124 +238,83 @@ def _detect_parenthood(df, dfd):
         'intensity': 5,
     }]
 
-def _build_narrative(events, df, dfd):
-    """Build a 5-6 sentence arc from all detected events."""
-    yr_min = int(df['year'].min())
-    yr_max = int(df['year'].max())
-    n_years = yr_max - yr_min + 1
-    total_h = round(df['ms'].sum() / 3600000)
+# ── Timeline HTML verticale ───────────────────────────────────────────────────
 
-    kids_kw = ['bébé','baby','lullaby','titounis','mancebo','bernardo','celesti',
-               'mclaughlin','moons','kiboomers','teddy','wonderland','comptines',
-               'petit ours','ainsi font','percussioney','batukem','tukada',
-               'música para bebés']
-    def is_kids(n): return any(k in n.lower() for k in kids_kw)
-    df_c = df[~df['apply'](is_kids) if False else df['artistName'].apply(lambda x: not is_kids(x))]
+def _render_timeline_html(events_sorted, df):
+    """Vertical HTML timeline — replaces the unreadable Plotly version."""
+    yearly = df.groupby('year')['ms'].sum() / 3600000
+    yearly_dict = dict(yearly)
 
-    # Dominant artist all-time
-    top_artist = df_c.groupby('artistName')['ms'].sum().idxmax()
-    top_h = round(df_c.groupby('artistName')['ms'].sum().max() / 3600000)
-
-    # Most intense obsession
-    obsessions = [e for e in events if e['type'] == 'obsession']
-    binge_events = [e for e in events if e['type'] == 'binge']
-    parenthood = [e for e in events if e['type'] == 'parenthood']
-    silence = [e for e in events if e['type'] == 'silence']
-
-    lines = []
-    lines.append(
-        str(n_years) + " years. " + str(total_h) + " hours. "
-        "The Witness has been watching the whole time."
-    )
-    lines.append(
-        top_artist + " is your most listened artist — " + str(top_h) + " hours. "
-        "That is not a favourite. That is a relationship."
-    )
-    if obsessions:
-        o = obsessions[0]
-        lines.append(
-            "There were moments of obsession — single tracks played dozens of times in a month. "
-            "The most intense: " + o['title'].split(' — ')[0] + ". "
-            "You were looking for something."
-        )
-    if parenthood:
-        p = parenthood[0]
-        lines.append(
-            "In " + str(p['year']) + ", your listening split in two. "
-            "Children's content arrived. Your music didn't disappear — it adapted."
-        )
-    if silence:
-        s = silence[0]
-        lines.append(
-            "There were periods of near-silence — months where music barely existed. "
-            "Something else was louder."
-        )
-    lines.append(
-        "The data does not know what happened in your life. "
-        "It only knows what you played, when you played it, and how many times. "
-        "The rest is yours."
-    )
-    return lines
-
-# ── Rendering ─────────────────────────────────────────────────────────────────
-
-def _render_timeline(events_sorted, df):
-    yr_min = int(df['year'].min())
-    yr_max = int(df['year'].max())
-
-    # Build yearly volume for background
-    yearly = df.groupby('year')['ms'].sum().reset_index()
-    yearly['hours'] = yearly['ms'] / 3600000
-    yearly_dict = dict(zip(yearly['year'], yearly['hours']))
-
-    fig = go.Figure()
-
-    # Background bars — yearly volume
-    fig.add_trace(go.Bar(
-        x=list(yearly_dict.keys()),
-        y=list(yearly_dict.values()),
-        marker_color='#1a1a1a',
-        name='Volume',
-        showlegend=False,
-        hovertemplate='%{x}: %{y:.0f}h<extra></extra>',
-    ))
-
-    # Event markers
-    type_colors = {
-        'binge':       VIOLET_LIGHT,
-        'silence':     '#555',
-        'abandonment': AMBER,
-        'obsession':   RED,
-        'timeshift':   BLUE,
-        'styleshift':  GREEN,
-        'parenthood':  '#f472b6',
+    type_labels = {
+        'binge':       ('🌊', 'Binge',       VIOLET_LIGHT),
+        'silence':     ('🔇', 'Silence',     '#888'),
+        'obsession':   ('🔁', 'Obsession',   RED),
+        'abandonment': ('👋', 'Abandonment', AMBER),
+        'timeshift':   ('🕐', 'Time shift',  BLUE),
+        'styleshift':  ('🎵', 'Style shift', GREEN),
+        'parenthood':  ('👶', 'Parenthood',  '#f472b6'),
     }
 
+    # Group events by year
+    by_year = defaultdict(list)
     for e in events_sorted:
-        yr = e['year']
-        vol = yearly_dict.get(yr, 0)
-        fig.add_trace(go.Scatter(
-            x=[yr], y=[vol + 20],
-            mode='markers+text',
-            marker=dict(size=14, color=type_colors.get(e['type'], VIOLET_LIGHT),
-                        symbol='circle', line=dict(width=2, color='#000')),
-            text=[e['icon']],
-            textposition='top center',
-            textfont=dict(size=14),
-            name=e['title'],
-            showlegend=False,
-            hovertemplate=e['title'] + '<extra></extra>',
-        ))
+        by_year[e['year']].append(e)
 
-    fig.update_layout(
-        plot_bgcolor='#0a0a0a', paper_bgcolor='#0a0a0a',
-        font_color='#888', height=260,
-        xaxis=dict(gridcolor='#1a1a1a', dtick=1, tickangle=45),
-        yaxis=dict(gridcolor='#1a1a1a', title='Hours'),
-        margin=dict(l=0, r=0, t=20, b=0),
-        barmode='overlay',
-    )
-    return fig
+    all_years = sorted(set(list(yearly_dict.keys()) + list(by_year.keys())))
+
+    html = "<div style='position:relative;padding-left:0;'>"
+
+    for yr in sorted(all_years, reverse=True):
+        h = yearly_dict.get(yr, 0)
+        evs = by_year.get(yr, [])
+
+        # Year row
+        bar_w = min(int(h / 20), 100)  # scale: 2000h = 100%
+        bar_color = VIOLET if evs else '#1e1e1e'
+
+        html += (
+            "<div style='display:flex;align-items:flex-start;gap:12px;"
+            "margin-bottom:" + ("4px" if not evs else "0") + ";'>"
+            # Year label
+            "<div style='min-width:40px;font-size:.85em;font-weight:900;"
+            "color:" + ("#fff" if evs else "#444") + ";padding-top:2px;'>"
+            + str(yr) + "</div>"
+            # Bar
+            "<div style='flex:1;padding-top:6px;'>"
+            "<div style='background:#111;border-radius:3px;height:6px;'>"
+            "<div style='background:" + bar_color + ";width:" + str(bar_w) + "%;"
+            "height:6px;border-radius:3px;'></div>"
+            "</div>"
+            "<div style='color:#555;font-size:.72em;margin-top:2px;'>" + str(int(h)) + "h</div>"
+            "</div>"
+            "</div>"
+        )
+
+        # Event cards for this year
+        for e in evs:
+            icon, label, color = type_labels.get(e['type'], ('•', e['type'], '#888'))
+            html += (
+                "<div style='display:flex;gap:12px;margin:6px 0 10px 52px;'>"
+                "<div style='width:3px;background:" + color + ";border-radius:3px;"
+                "flex-shrink:0;'></div>"
+                "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
+                "border-radius:8px;padding:12px 14px;flex:1;'>"
+                "<div style='display:flex;align-items:center;gap:6px;margin-bottom:6px;'>"
+                "<span style='font-size:1em;'>" + icon + "</span>"
+                "<span style='font-size:.75em;font-weight:700;color:" + color + ";'>"
+                + label.upper() + "</span>"
+                "<span style='font-size:.78em;color:#ccc;font-weight:600;'>"
+                + e['title'] + "</span>"
+                "</div>"
+                "<div style='color:#888;font-size:.8em;line-height:1.6;'>"
+                + e['body'] + "</div>"
+                "</div></div>"
+            )
+
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
+
+# ── Main render ───────────────────────────────────────────────────────────────
 
 def render(dfm, dfd=None):
     st.markdown(
@@ -382,7 +324,7 @@ def render(dfm, dfd=None):
     )
     st.title("The Witness")
     st.markdown(
-        "<div style='color:#555;font-size:.88em;font-style:italic;margin-bottom:20px;'>"
+        "<div style='color:#888;font-size:.88em;font-style:italic;margin-bottom:20px;'>"
         "The Witness doesn't know what happened in your life. "
         "It only knows what you played, when, and how many times."
         "</div>",
@@ -395,7 +337,7 @@ def render(dfm, dfd=None):
 
     if dfd is None: dfd = pd.DataFrame()
 
-    with st.spinner("Analysing 12 years of signals..."):
+    with st.spinner("Analysing signals..."):
         events  = []
         events += _detect_binge_anomalies(dfm)
         events += _detect_silence(dfm)
@@ -404,85 +346,31 @@ def render(dfm, dfd=None):
         events += _detect_time_shift(dfm)
         events += _detect_style_shift(dfm)
         events += _detect_parenthood(dfm, dfd)
-
         events_sorted = sorted(events, key=lambda x: x['date'])
 
-    # ── Timeline ──────────────────────────────────────────────────────────
+    # ── Timeline HTML ─────────────────────────────────────────────────────
     st.markdown("### The Timeline")
-    fig = _render_timeline(events_sorted, dfm)
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Legend
-    legend_items = [
-        ('🌊', VIOLET_LIGHT, 'Binge'),
-        ('🔇', '#666',       'Silence'),
-        ('🔁', RED,          'Obsession'),
-        ('👋', AMBER,        'Abandonment'),
-        ('🕐', BLUE,         'Time shift'),
-        ('🎵', GREEN,        'Style shift'),
-        ('👶', '#f472b6',    'Parenthood'),
-    ]
-    legend_html = "<div style='display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;'>"
-    for icon, color, label in legend_items:
-        legend_html += (
-            "<span style='font-size:.75em;color:" + color + ";'>"
-            + icon + " " + label + "</span>"
-        )
-    legend_html += "</div>"
-    st.markdown(legend_html, unsafe_allow_html=True)
+    st.caption("Each year with a detected signal is expanded. Bars = listening volume.")
+    _render_timeline_html(events_sorted, dfm)
 
     st.markdown("---")
 
-    # ── Event cards ───────────────────────────────────────────────────────
-    st.markdown("### What The Witness Observed")
-
-    type_order = ['parenthood','binge','obsession','silence','abandonment','timeshift','styleshift']
-    events_display = sorted(events_sorted, key=lambda x: (
-        type_order.index(x['type']) if x['type'] in type_order else 99, x['date']
-    ))
-
-    cols = st.columns(2)
-    for i, e in enumerate(events_display):
-        with cols[i % 2]:
-            st.markdown(
-                "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
-                "border-left:3px solid " + e['color'] + ";border-radius:10px;"
-                "padding:14px;margin-bottom:10px;'>"
-                "<div style='display:flex;align-items:center;gap:8px;margin-bottom:8px;'>"
-                "<span style='font-size:1.3em;'>" + e['icon'] + "</span>"
-                "<span style='font-size:.78em;font-weight:700;color:" + e['color'] + ";'>"
-                + e['title'] + "</span>"
-                "</div>"
-                "<div style='color:#666;font-size:.82em;line-height:1.7;'>"
-                + e['body'] + "</div>"
-                "</div>",
-                unsafe_allow_html=True
-            )
-
-    st.markdown("---")
-
-    # ── Style evolution chart ─────────────────────────────────────────────
+    # ── Your Sound per year ───────────────────────────────────────────────
     st.markdown("### Your Sound — #1 Artist Per Year")
-    kids_kw = ['bébé','baby','lullaby','titounis','mancebo','bernardo','celesti',
-               'mclaughlin','moons','kiboomers','teddy','wonderland','comptines',
-               'petit ours','ainsi font','percussioney','batukem','tukada',
-               'música para bebés']
-    def is_kids(n): return any(k in n.lower() for k in kids_kw)
-    df_c = dfm[~dfm['artistName'].apply(is_kids)]
-
+    df_c = dfm[~dfm['artistName'].apply(_is_kids)]
     era_rows = []
     for yr, grp in df_c.groupby('year'):
         if grp['ms'].sum() < 20_000_000: continue
-        top = grp.groupby('artistName')['ms'].sum()
+        top        = grp.groupby('artistName')['ms'].sum()
         top_artist = top.idxmax()
-        top_h = round(top.max() / 3600000, 0)
-        total_h = round(grp['ms'].sum() / 3600000, 0)
+        top_h      = round(top.max() / 3600000, 0)
+        total_h    = round(grp['ms'].sum() / 3600000, 0)
         era_rows.append({'year': yr, 'artist': top_artist,
                          'hours': top_h, 'total': total_h})
 
     era_df = pd.DataFrame(era_rows).sort_values('year', ascending=False)
     for _, row in era_df.iterrows():
-        pct = round(row['hours'] / row['total'] * 100) if row['total'] > 0 else 0
+        pct   = round(row['hours'] / row['total'] * 100) if row['total'] > 0 else 0
         bar_w = min(pct * 3, 100)
         st.markdown(
             "<div style='display:flex;align-items:center;gap:12px;"
@@ -495,8 +383,7 @@ def render(dfm, dfd=None):
             "<div style='background:#1a1a1a;border-radius:3px;height:4px;'>"
             "<div style='background:" + VIOLET_LIGHT + ";width:" + str(bar_w) + "%;"
             "height:4px;border-radius:3px;'></div>"
-            "</div>"
-            "</div>"
+            "</div></div>"
             "<span style='font-size:.78em;color:#555;min-width:60px;text-align:right;'>"
             + str(int(row['hours'])) + "h (" + str(pct) + "%)</span>"
             "</div>",
@@ -505,24 +392,19 @@ def render(dfm, dfd=None):
 
     st.markdown("---")
 
-    # ── The full picture ──────────────────────────────────────────────────
+    # ── The Full Picture ──────────────────────────────────────────────────
     st.markdown("### The Full Picture")
-    kids_kw2 = ['bébé','baby','lullaby','titounis','mancebo','bernardo','celesti',
-                'mclaughlin','moons','kiboomers','teddy','wonderland','comptines',
-                'petit ours','ainsi font','percussioney','batukem','tukada',
-                'música para bebés']
-    def is_kids2(n): return any(k in n.lower() for k in kids_kw2)
-    df_c2 = dfm[~dfm['artistName'].apply(is_kids2)]
-
-    yr_min = int(dfm['year'].min())
-    yr_max = int(dfm['year'].max())
-    total_h = round(df_c2['ms'].sum() / 3600000)
+    df_c2      = dfm[~dfm['artistName'].apply(_is_kids)]
+    yr_min     = int(dfm['year'].min())
+    yr_max     = int(dfm['year'].max())
+    total_h    = round(df_c2['ms'].sum() / 3600000)
     top_artist = df_c2.groupby('artistName')['ms'].sum().idxmax()
-    top_h = round(df_c2.groupby('artistName')['ms'].sum().max() / 3600000)
+    top_h      = round(df_c2.groupby('artistName')['ms'].sum().max() / 3600000)
+
     obsessions = [e for e in events if e['type'] == 'obsession']
     parenthood = [e for e in events if e['type'] == 'parenthood']
     silence_ev = [e for e in events if e['type'] == 'silence']
-    binges = [e for e in events if e['type'] == 'binge']
+    binges     = [e for e in events if e['type'] == 'binge']
 
     sentences = []
     sentences.append(
@@ -535,10 +417,13 @@ def render(dfm, dfd=None):
     )
     if obsessions:
         o = obsessions[0]
+        title_parts = o['title'].split(' — ')
+        track_name  = title_parts[0]
+        play_count  = title_parts[1].split(' ')[0] if len(title_parts) > 1 else "dozens of"
         sentences.append(
             "There were moments of obsession — "
-            + o['title'].split(' — ')[0] + " played "
-            + o['title'].split(' — ')[1].split(' ')[0] + " times in a month. "
+            + track_name + " played "
+            + play_count + " times in a month. "
             "That is not listening. That is something else."
         )
     if parenthood:
@@ -565,9 +450,9 @@ def render(dfm, dfd=None):
 
     st.markdown(
         "<div style='background:#0a0a0a;border:1px solid #1e1e1e;"
-        "border-radius:14px;padding:24px;line-height:2;'>"
+        "border-radius:14px;padding:24px;line-height:2.2;'>"
         + " ".join([
-            "<span style='color:#aaa;font-size:.9em;'>" + s + "</span>"
+            "<span style='color:#aaa;font-size:.9em;'>" + s + " </span>"
             for s in sentences
         ]) +
         "</div>",
