@@ -27,14 +27,14 @@ def _quiz():
         "padding:20px;margin-bottom:20px;'>"
         "<div style='color:#A78BFA;font-size:.72em;font-weight:700;text-transform:uppercase;"
         "letter-spacing:.1em;margin-bottom:12px;'>Before you see your sign — 3 questions</div>"
-        "<div style='color:#555;font-size:.82em;'>Answer honestly. We will compare with your actual data.</div>"
+        "<div style='color:#888;font-size:.82em;'>Answer honestly. We will compare with your actual data.</div>"
         "</div>",
         unsafe_allow_html=True
     )
 
     q1 = st.text_input(
         "Your #1 artist all-time according to you:",
-        placeholder="e.g. Terry Callier",
+        placeholder="e.g. Taylor Swift",
         key="quiz_artist_input"
     )
     q2 = st.selectbox(
@@ -88,7 +88,7 @@ def _gap_analysis(s):
         "Eclectic — I genuinely listen to everything": ("eclectic",
             s.get('unique_artists', 0) > 3000 and s.get('tracks_per_artist', 10) > 3),
     }
-    sel = style_map.get(quiz_style, ("unknown", False))
+    sel        = style_map.get(quiz_style, ("unknown", False))
     style_key, style_ok = sel
     style_reality = {
         "explorer": str(int(s.get('art_per_year', 0))) + " new artists/year. " +
@@ -109,7 +109,7 @@ def _gap_analysis(s):
         "ok": style_ok,
     })
 
-    peak_h = s.get('peak_hour', 18)
+    peak_h   = s.get('peak_hour', 18)
     time_map = {
         "Morning (before 9am)": 5 <= peak_h <= 8,
         "Daytime (9am-6pm)":    9 <= peak_h <= 17,
@@ -137,18 +137,18 @@ def _gap_analysis(s):
         st.markdown(
             "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
             "border-left:3px solid " + color + ";border-radius:8px;padding:14px;margin-bottom:8px;'>"
-            "<div style='font-size:.72em;color:#555;font-weight:700;text-transform:uppercase;"
+            "<div style='font-size:.72em;color:#888;font-weight:700;text-transform:uppercase;"
             "letter-spacing:.08em;margin-bottom:8px;'>" + gap['label'] + "</div>"
             "<div style='display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;'>"
             "<div style='flex:1;min-width:120px;'>"
-            "<div style='font-size:.72em;color:#555;margin-bottom:3px;'>You said</div>"
+            "<div style='font-size:.72em;color:#888;margin-bottom:3px;'>You said</div>"
             "<div style='color:#fff;font-weight:700;font-size:.9em;'>" + gap['you_said'] + "</div>"
             "</div>"
             "<div style='flex:1;min-width:120px;'>"
-            "<div style='font-size:.72em;color:#555;margin-bottom:3px;'>Data says</div>"
+            "<div style='font-size:.72em;color:#888;margin-bottom:3px;'>Data says</div>"
             "<div style='color:" + color + ";font-weight:700;font-size:.9em;'>" + gap['data_says'] + "</div>"
             "</div></div>"
-            "<div style='color:#444;font-size:.78em;font-style:italic;'>" + gap['verdict'] + "</div>"
+            "<div style='color:#888;font-size:.78em;font-style:italic;'>" + gap['verdict'] + "</div>"
             "</div>",
             unsafe_allow_html=True
         )
@@ -182,10 +182,10 @@ def render(dfm, dfd=None, lib=None, playlists=None):
             "border:1px solid #7C3AED55;border-radius:20px;padding:36px;"
             "text-align:center;margin-bottom:28px;'>"
             "<div style='font-size:3.5em;margin-bottom:8px;'>" + arch.get('emoji', '🎵') + "</div>"
-            "<div style='font-size:.7em;color:#444;text-transform:uppercase;"
+            "<div style='font-size:.7em;color:#888;text-transform:uppercase;"
             "letter-spacing:.14em;margin-bottom:6px;'>Your Musical Sign</div>"
             "<div style='font-size:2em;font-weight:900;color:#A78BFA;'>" + arch['name'] + "</div>"
-            "<div style='color:#333;font-size:.82em;margin-top:10px;font-style:italic;'>"
+            "<div style='color:#555;font-size:.82em;margin-top:10px;font-style:italic;'>"
             + _fmt(arch.get('data_line', ''), s) + "</div>"
             "</div>",
             unsafe_allow_html=True
@@ -199,7 +199,7 @@ def render(dfm, dfd=None, lib=None, playlists=None):
             _card_block("Your Prediction", VIOLET_LIGHT, _fmt(arch['prediction'], s), "#0a0520")
 
             st.markdown(
-                "<div style='color:#555;font-size:.72em;font-weight:700;"
+                "<div style='color:#888;font-size:.72em;font-weight:700;"
                 "text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;'>"
                 "Your Numbers</div>",
                 unsafe_allow_html=True
@@ -221,7 +221,7 @@ def render(dfm, dfd=None, lib=None, playlists=None):
                 html += (
                     "<div style='display:flex;justify-content:space-between;padding:5px 0;"
                     "border-bottom:1px solid #1a1a1a;font-size:.82em;'>"
-                    "<span style='color:#555;'>" + lbl + "</span>"
+                    "<span style='color:#888;'>" + lbl + "</span>"
                     "<span style='color:#fff;font-weight:700;'>" + val + "</span></div>"
                 )
             html += "</div>"
@@ -260,7 +260,7 @@ def render(dfm, dfd=None, lib=None, playlists=None):
                     "<div style='font-size:1.4em;margin-bottom:4px;'>" + a['emoji'] + "</div>"
                     "<div style='font-weight:800;color:#fff;font-size:.92em;'>"
                     + a['name'] + badge + "</div>"
-                    "<div style='color:#555;font-size:.78em;margin-top:6px;line-height:1.5;'>"
+                    "<div style='color:#888;font-size:.78em;margin-top:6px;line-height:1.5;'>"
                     + a['desc'] + "</div>"
                     "</div>",
                     unsafe_allow_html=True
