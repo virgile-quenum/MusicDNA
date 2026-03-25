@@ -120,16 +120,15 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     if dfm is None or dfm.empty:
         return None
 
-    yr_min  = int(dfm['year'].min())
-    yr_max  = int(dfm['year'].max())
-    n_years = max(yr_max - yr_min + 1, 1)
-    my_h    = dfm['ms'].sum() / 3600000
-    my_art  = dfm['artistName'].nunique()
-
-    total_all = my_h + ((dfd['ms'].sum() / 3600000) if dfd is not None and not dfd.empty else 0)
-    kids_ms   = dfd['ms'].sum() if dfd is not None and not dfd.empty else 0
-    kids_h    = kids_ms / 3600000
-    kids_pct  = kids_h / total_all * 100 if total_all > 0 else 0
+    yr_min     = int(dfm['year'].min())
+    yr_max     = int(dfm['year'].max())
+    n_years    = max(yr_max - yr_min + 1, 1)
+    my_h       = dfm['ms'].sum() / 3600000
+    my_art     = dfm['artistName'].nunique()
+    total_all  = my_h + ((dfd['ms'].sum() / 3600000) if dfd is not None and not dfd.empty else 0)
+    kids_ms    = dfd['ms'].sum() if dfd is not None and not dfd.empty else 0
+    kids_h     = kids_ms / 3600000
+    kids_pct   = kids_h / total_all * 100 if total_all > 0 else 0
 
     artist_ms      = dfm.groupby('artistName')['ms'].sum()
     top_artist     = artist_ms.idxmax() if not artist_ms.empty else "—"
@@ -137,12 +136,12 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     top_artist_pct = top_artist_ms / dfm['ms'].sum() * 100 if dfm['ms'].sum() > 0 else 0
     top_artist_h   = top_artist_ms / 3600000
 
-    skip_rate    = dfm['skipped'].mean() * 100 if 'skipped' in dfm.columns else 20
-    shuffle_pct  = dfm['shuffle'].mean() * 100 if 'shuffle' in dfm.columns else 0
-    track_counts = dfm.groupby('trackName').size()
-    repeat_rate  = (track_counts > 1).sum() / max(len(track_counts), 1)
+    skip_rate      = dfm['skipped'].mean() * 100 if 'skipped' in dfm.columns else 20
+    shuffle_pct    = dfm['shuffle'].mean() * 100 if 'shuffle' in dfm.columns else 0
+    track_counts   = dfm.groupby('trackName').size()
+    repeat_rate    = (track_counts > 1).sum() / max(len(track_counts), 1)
 
-    top50_hours  = dfm.groupby('artistName')['ms'].sum().nlargest(50).mean() / 3600000
+    top50_hours = dfm.groupby('artistName')['ms'].sum().nlargest(50).mean() / 3600000
     art_per_100h = (my_art / my_h * 100) if my_h > 0 else 0
 
     new_per_year = dfm.groupby('year')['artistName'].apply(
@@ -158,15 +157,16 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     old_music_pct = dfm[dfm['artistName'].isin(old_artists)]['ms'].sum() / dfm['ms'].sum() * 100
 
     tracks_per_artist = dfm['trackName'].nunique() / max(my_art, 1)
-
+    binge_sessions = 0
     df_s = dfm.sort_values('ts').copy()
     df_s['gap'] = df_s['ts'].diff().dt.total_seconds().fillna(0)
     df_s['sid'] = (df_s['gap'] > 1800).cumsum()
-    sessions       = df_s.groupby('sid')['ms'].sum() / 3600000
+    sessions = df_s.groupby('sid')['ms'].sum() / 3600000
     binge_sessions = int((sessions >= 2).sum())
 
     night_ms  = dfm[dfm['hour'] >= 22]['ms'].sum()
     night_pct = night_ms / dfm['ms'].sum() * 100
+
     peak_year = int(dfm.groupby('year')['ms'].sum().idxmax())
     peak_hour = int(dfm.groupby('hour')['ms'].sum().idxmax())
 
@@ -175,27 +175,36 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
         k = dfd.groupby('year')['ms'].sum()
         kids_peak_year = int(k.idxmax()) if not k.empty else yr_max
 
-    avg_artist_popularity = 50
-    mainstream_pct        = 0
+    # avg artist popularity proxy (tracks_per_artist inverse as rough signal)
+    avg_artist_popularity = 50  # default — real value needs Spotify API
+    mainstream_pct = 0
 
-    playlist_staleness     = 0.0
+    # playlist staleness
+    playlist_staleness = 0.0
     playlist_concentration = 0.0
-    stale_playlist_pct     = 0.0
+    stale_playlist_pct = 0.0
     if playlists:
         try:
+            import datetime
+            now_year = yr_max
             stale = 0
             for pl in playlists:
                 tracks = pl.get('items', [])
                 if not tracks: continue
-                last_added = max((t.get('addedDate', '') or '' for t in tracks), default='')
-                if last_added and int(last_added[:4]) < yr_max - 2:
+                last_added = max(
+                    (t.get('addedDate', '') or '' for t in tracks),
+                    default=''
+                )
+                if last_added and int(last_added[:4]) < now_year - 2:
                     stale += 1
-            playlist_staleness     = stale / max(len(playlists), 1)
-            stale_playlist_pct     = round(playlist_staleness * 100)
+            playlist_staleness = stale / max(len(playlists), 1)
+            stale_playlist_pct = round(playlist_staleness * 100)
+            # concentration: % plays from top 3 playlists (approximate)
             playlist_concentration = min(playlist_staleness, 1.0)
         except:
             pass
 
+    # ── 5 dimension scores ──────────────────────────────────────────────
     diversity      = round(min(art_per_100h / 120, 1.0) * 20)
     depth          = round(min(top50_hours / 25, 1.0) * 20)
     intent_raw     = (1 - skip_rate/100) * 0.55 + repeat_rate * 0.45
@@ -227,7 +236,8 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
 
     archetype = get_archetype(dims, stats)
 
-    return {**stats, **dims, 'total': total, 'archetype': archetype, 'dims': dims}
+    return {**stats, **dims, 'total': total,
+            'archetype': archetype, 'dims': dims}
 
 def score_label(total):
     if total >= 85: return "Legendary", GREEN
