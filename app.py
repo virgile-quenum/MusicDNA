@@ -18,13 +18,20 @@ CSS = """
 [data-testid="stSidebar"] * { color: #ccc; }
 .metric-card { background:#0f0f0f; border:1px solid #1e1e1e; border-radius:12px; padding:18px; text-align:center; margin:4px 0; }
 .metric-val { font-size:1.9em; font-weight:900; color:#A78BFA; }
-.metric-lbl { font-size:.72em; color:#555; margin-top:5px; }
-.insight { background:#0f0f0f; border-left:3px solid #7C3AED; border-radius:6px; padding:11px 15px; margin:7px 0; font-size:.87em; color:#ccc; line-height:1.6; }
-.shame { background:#0f0505; border-left:3px solid #dc2626; border-radius:6px; padding:11px 15px; margin:7px 0; font-size:.87em; color:#ccc; line-height:1.6; }
+.metric-lbl { font-size:.78em; color:#aaa; margin-top:5px; }
+.insight { background:#0f0f0f; border-left:3px solid #7C3AED; border-radius:6px; padding:11px 15px; margin:7px 0; font-size:.87em; color:#ddd; line-height:1.7; }
+.shame { background:#0f0505; border-left:3px solid #dc2626; border-radius:6px; padding:11px 15px; margin:7px 0; font-size:.87em; color:#ddd; line-height:1.7; }
 h1 { color:#fff !important; }
 h2 { color:#A78BFA !important; font-size:1em !important; text-transform:uppercase; letter-spacing:.09em; }
-.stTabs [data-baseweb="tab"] { color:#666; }
+h3 { color:#fff !important; }
+p { color:#ccc; }
+.stTabs [data-baseweb="tab"] { color:#888; }
 .stTabs [aria-selected="true"] { color:#A78BFA !important; }
+.stCaption { color:#888 !important; }
+div[data-testid="stMarkdownContainer"] p { color: #ccc; }
+div[data-testid="stMarkdownContainer"] li { color: #ccc; }
+span { color: inherit; }
+.dataframe { color: #ccc !important; }
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
@@ -194,16 +201,18 @@ if (not st.session_state.data_loaded
         _load_into_session(cached)
         st.rerun()
 
-SECTION_YOUR_STORY = ["Overview", "Musical Horoscope", "Celebrity Twin"]
+SECTION_YOUR_STORY = ["Overview", "Musical Horoscope", "Celebrity Twin", "Taste Drift"]
 SECTION_DEEP_DIVES = ["Artists and Tracks", "Likes Autopsy", "Playlist Autopsy",
-                      "Time Patterns", "Podcast Autopsy"]
-SECTION_FORGOTTEN  = ["Forgotten", "Explore", "The Witness"]
+                      "Podcast Autopsy"]
+SECTION_WITNESS    = ["The Witness"]
+SECTION_FORGOTTEN  = ["Forgotten", "Explore"]
 SECTION_DARK_SIDE  = ["Hall of Shame", "Parent Mode"]
 PAGES_FULL_DNA     = ["Genre Profile"]
 
 PAGES_BASE = (
     SECTION_YOUR_STORY +
     SECTION_DEEP_DIVES +
+    SECTION_WITNESS    +
     SECTION_FORGOTTEN  +
     SECTION_DARK_SIDE
 )
@@ -238,7 +247,7 @@ with st.sidebar:
                 "border-radius:8px;padding:12px;margin-bottom:12px;'>"
                 "<div style='color:#A78BFA;font-size:.78em;font-weight:700;margin-bottom:4px;'>"
                 "Unlock Full DNA</div>"
-                "<div style='color:#555;font-size:.76em;line-height:1.6;'>"
+                "<div style='color:#888;font-size:.76em;line-height:1.6;'>"
                 "Upload your Extended History zip to add 9 deep analyses and Genre Profile."
                 "</div></div>",
                 unsafe_allow_html=True
@@ -250,7 +259,7 @@ with st.sidebar:
             "border-radius:8px;padding:10px 14px;margin-bottom:14px;"
             "text-decoration:none;color:#1DB954;font-size:.8em;font-weight:700;'>"
             "↗ Download your Spotify data"
-            "<div style='color:#555;font-weight:400;font-size:.85em;margin-top:2px;'>"
+            "<div style='color:#888;font-weight:400;font-size:.85em;margin-top:2px;'>"
             "spotify.com/account/privacy — request Extended streaming history"
             "</div></a>",
             unsafe_allow_html=True
@@ -315,16 +324,17 @@ with st.sidebar:
             nav_pages += PAGES_FULL_DNA
 
         section_map = {}
-        for p in SECTION_YOUR_STORY: section_map[p] = ("Your story",      "#555")
-        for p in SECTION_DEEP_DIVES: section_map[p] = ("Deep dives",      "#555")
-        for p in SECTION_FORGOTTEN:  section_map[p] = ("What you forgot", "#555")
-        for p in SECTION_DARK_SIDE:  section_map[p] = ("The dark side",   "#555")
+        for p in SECTION_YOUR_STORY: section_map[p] = ("Your story",      "#888")
+        for p in SECTION_DEEP_DIVES: section_map[p] = ("Deep dives",      "#888")
+        for p in SECTION_WITNESS:    section_map[p] = ("The witness",      "#888")
+        for p in SECTION_FORGOTTEN:  section_map[p] = ("What you forgot",  "#888")
+        for p in SECTION_DARK_SIDE:  section_map[p] = ("The dark side",    "#888")
         if is_authenticated():
-            for p in PAGES_FULL_DNA: section_map[p] = ("Full DNA",        "#1DB954")
+            for p in PAGES_FULL_DNA: section_map[p] = ("Full DNA",         "#1DB954")
 
         current_section = ""
         for p in nav_pages:
-            sec, color = section_map.get(p, ("", "#555"))
+            sec, color = section_map.get(p, ("", "#888"))
             if sec != current_section:
                 current_section = sec
                 st.markdown(
@@ -370,6 +380,7 @@ df        = pd.concat([dfm, dfd]) if (kids_on and dfd is not None and not dfd.em
 
 if   "Overview"           in page: import overview;         overview.render(dfm, dfd, kids_on, lib, playlists)
 elif "Musical Horoscope"  in page: import horoscope;        horoscope.render(dfm, dfd, lib, playlists)
+elif "Taste Drift"        in page: import taste_drift;      taste_drift.render(dfm)
 elif "Likes Autopsy"      in page: import likes_autopsy;    likes_autopsy.render(dfm, lib)
 elif "Playlist Autopsy"   in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
 elif "Explore"            in page: import explore;          explore.render(dfm)
@@ -379,6 +390,5 @@ elif "Hall of Shame"      in page: import hall_of_shame;    hall_of_shame.render
 elif "Parent Mode"        in page: import parent_mode;      parent_mode.render(dfm, dfd, [])
 elif "Celebrity Twin"     in page: import celebrity_twin;   celebrity_twin.render(dfm)
 elif "Artists and Tracks" in page: import artists;          artists.render(df)
-elif "Time Patterns"      in page: import time_patterns;    time_patterns.render(df)
 elif "Podcast Autopsy"    in page: import podcast_autopsy;  podcast_autopsy.render(dfp)
 elif "Genre Profile"      in page: import audio_profile;    audio_profile.render(dfm)
