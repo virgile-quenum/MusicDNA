@@ -1,9 +1,6 @@
 """
 filters.py — split user vs children's content, extended kids detection
 """
-import re
-
-# ── extended kids keywords ────────────────────────────────────────────────────
 
 KIDS_ARTIST_KEYWORDS = {
     # french
@@ -11,28 +8,42 @@ KIDS_ARTIST_KEYWORDS = {
     "les bisounours", "tchoupi", "les minouchkis", "dorothée",
     "chansons pour enfants", "comptines", "les coccinelles",
     "pil et face", "les razmoket", "le manège enchanté",
-    # brazilian / portuguese
-    "judson mancebo", "mundo bita", "galinha pintadinha", "palavra cantada",
-    "patati patatá", "patati patata", "turma do balão mágico", "xuxa",
-    "luluca", "bonde do tigrão",
-    # indian / bollywood kids
-    "jatin-lalit", "jatin lalit",
+    "petit ours brun", "monde des titounis", "alain royer",
+    "les chansons de", "comptines tv",
+    # lullaby / relaxation / baby
+    "lullaby time", "marco bernardo", "beth mclaughlin",
+    "música para bebés", "musica para bebes",
+    "música para bebés exigentes", "musica para bebes exigentes",
+    "music for babies", "baby music from", "baby music",
+    "nursery rhymes", "sleeping baby", "lullabies for babies",
+    "baby einstein", "miracle tones", "baby lullaby",
+    "relaxing music for babies", "lullaby babies",
+    "música para bebês", "musica para bebes",
+    "i'm in records", "baby music from i'm in records",
+    "percussioney", "batukem tukada",
     # english kids
     "cocomelon", "pinkfong", "super simple songs", "baby shark",
     "the wiggles", "barney", "hi-5", "hi5", "mrs. rachel",
     "blippi", "chuggington", "bob the builder",
-    # lullaby / generic
-    "lullaby time", "marco bernardo", "beth mclaughlin",
-    "música para bebés", "musica para bebes",
-    "música para bebés exigentes", "musica para bebes exigentes",
-    "music for babies", "baby music", "nursery rhymes",
-    "sleeping baby", "lullabies for babies",
+    "little moons", "bobby celesti", "kiboomers",
+    "teddy's wonderland", "teddy wonderland",
+    "the kiboomers", "carmen campagne",
+    "arlen ness", "judson mancebo",
+    # brazilian / portuguese
+    "mundo bita", "galinha pintadinha", "palavra cantada",
+    "patati patatá", "patati patata", "turma do balão mágico", "xuxa",
+    "luluca", "bonde do tigrão",
+    # generic
+    "baby songs", "kids songs", "children songs",
+    "toddler songs", "preschool songs",
 }
 
 KIDS_TRACK_KEYWORDS = {
     # french
     "berceuse", "comptine", "dodo", "nounours", "petit lapin",
     "il était une fois", "il etait une fois",
+    "ainsi font font font", "ainsi font",
+    "batuqui cha cha cha",
     # shows / movies
     "frozen", "reine des neiges", "vaiana", "moana", "encanto",
     "hatrix", "miraculous", "winx", "peppa pig", "paw patrol",
@@ -41,18 +52,29 @@ KIDS_TRACK_KEYWORDS = {
     "roi lion", "lion king", "belle et la bête", "beauty and the beast",
     "aladdin", "cinderella", "cendrillon", "blanche neige",
     "snow white", "pinocchio", "peter pan", "nemo", "dory",
-    "monsters inc", "ratatouille", "wall-e", "walle", "up pixar",
+    "monsters inc", "ratatouille", "wall-e", "walle",
     "coco pixar", "soul pixar", "turning red", "brave pixar",
     "inside out", "vice versa",
     # generic
     "lullaby", "lullabies", "nursery rhyme", "nursery rhymes",
-    "bébé", "bebe", "baby song", "kids song", "children song",
-    "goodnight", "bonne nuit", "dors mon bébé",
+    "bébé", "bebe ", "baby song", "kids song", "children song",
+    "goodnight song", "bonne nuit", "dors mon bébé",
 }
 
 KIDS_ALBUM_KEYWORDS = {
     "disney", "pixar", "dreamworks kids", "nickelodeon",
     "cartoon network", "baby einstein",
+}
+
+# ── Artists to always classify as kids regardless of other signals ────────────
+KIDS_ARTIST_EXACT = {
+    "alain royer", "bobby celesti", "marco bernardo", "beth mclaughlin",
+    "judson mancebo", "little moons", "kiboomers", "the kiboomers",
+    "teddy's wonderland", "teddy wonderland", "arlen ness",
+    "carmen compagne", "carmen campagne", "monde des titounis",
+    "comptines tv", "miracle tones", "percussioney", "batukem tukada",
+    "lullaby time", "música para bebés exigentes de i'm in records",
+    "baby music from i'm in records",
 }
 
 
@@ -61,9 +83,13 @@ def _clean(s):
 
 
 def is_kids_content(artist_name, track_name, album_name=""):
-    a = _clean(artist_name)
-    t = _clean(track_name)
+    a  = _clean(artist_name)
+    t  = _clean(track_name)
     al = _clean(album_name)
+
+    # Exact match first — fastest and most reliable
+    if a in KIDS_ARTIST_EXACT:
+        return True
 
     for kw in KIDS_ARTIST_KEYWORDS:
         if kw in a:
@@ -82,7 +108,8 @@ def is_kids_content(artist_name, track_name, album_name=""):
 CULTURE_ARTISTS = {
     "French": [
         "henri dès", "henri des", "anny versini", "aldebert", "titounis",
-        "dorothée", "les bisounours", "comptines", "berceuse",
+        "dorothée", "les bisounours", "comptines", "alain royer",
+        "monde des titounis", "comptines tv",
     ],
     "Brazilian / Portuguese": [
         "judson mancebo", "mundo bita", "galinha pintadinha",
@@ -90,20 +117,17 @@ CULTURE_ARTISTS = {
     ],
     "Indian / Bollywood": [
         "jatin-lalit", "jatin lalit", "bole chudiyan", "kuch kuch",
-        "dilbar", "nagada", "discowale",
     ],
     "English": [
         "cocomelon", "pinkfong", "super simple songs", "baby shark",
-        "the wiggles", "blippi", "mrs. rachel",
-    ],
-    "African / Afrobeats": [
-        "marco bernardo", "beth mclaughlin",
+        "the wiggles", "blippi", "mrs. rachel", "kiboomers",
+        "the kiboomers", "little moons", "bobby celesti",
+        "teddy's wonderland", "arlen ness", "carmen campagne",
     ],
 }
 
 
 def detect_child_cultures(dfd):
-    """Returns dict of culture -> hours for children's content df."""
     if dfd is None or dfd.empty:
         return {}
     cultures = {}
@@ -115,10 +139,6 @@ def detect_child_cultures(dfd):
     return {k: round(v, 1) for k, v in sorted(cultures.items(), key=lambda x: -x[1])}
 
 
-# ── user / children split ─────────────────────────────────────────────────────
-
-DAUGHTERS_ARTISTS = set(KIDS_ARTIST_KEYWORDS)
-
 DAUGHTERS_TRACKS = {
     "i'll be there - instrumental",
     "i'll be there",
@@ -126,15 +146,13 @@ DAUGHTERS_TRACKS = {
 
 
 def is_daughters(record):
-    """Legacy function name kept for compatibility."""
-    a = _clean(record.get("artistName", ""))
-    t = _clean(record.get("trackName", ""))
+    a  = _clean(record.get("artistName", ""))
+    t  = _clean(record.get("trackName", ""))
     al = _clean(record.get("albumName", ""))
     return is_kids_content(a, t, al)
 
 
 def split(records):
-    """Split records into (user_records, children_records)."""
     user, kids = [], []
     for r in records:
         if is_daughters(r):
