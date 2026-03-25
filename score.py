@@ -141,7 +141,7 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     track_counts   = dfm.groupby('trackName').size()
     repeat_rate    = (track_counts > 1).sum() / max(len(track_counts), 1)
 
-    top50_hours = dfm.groupby('artistName')['ms'].sum().nlargest(50).mean() / 3600000
+    top50_hours  = dfm.groupby('artistName')['ms'].sum().nlargest(50).mean() / 3600000
     art_per_100h = (my_art / my_h * 100) if my_h > 0 else 0
 
     new_per_year = dfm.groupby('year')['artistName'].apply(
@@ -157,16 +157,14 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     old_music_pct = dfm[dfm['artistName'].isin(old_artists)]['ms'].sum() / dfm['ms'].sum() * 100
 
     tracks_per_artist = dfm['trackName'].nunique() / max(my_art, 1)
-    binge_sessions = 0
     df_s = dfm.sort_values('ts').copy()
     df_s['gap'] = df_s['ts'].diff().dt.total_seconds().fillna(0)
     df_s['sid'] = (df_s['gap'] > 1800).cumsum()
-    sessions = df_s.groupby('sid')['ms'].sum() / 3600000
+    sessions       = df_s.groupby('sid')['ms'].sum() / 3600000
     binge_sessions = int((sessions >= 2).sum())
 
     night_ms  = dfm[dfm['hour'] >= 22]['ms'].sum()
     night_pct = night_ms / dfm['ms'].sum() * 100
-
     peak_year = int(dfm.groupby('year')['ms'].sum().idxmax())
     peak_hour = int(dfm.groupby('hour')['ms'].sum().idxmax())
 
@@ -175,36 +173,30 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
         k = dfd.groupby('year')['ms'].sum()
         kids_peak_year = int(k.idxmax()) if not k.empty else yr_max
 
-    # avg artist popularity proxy (tracks_per_artist inverse as rough signal)
-    avg_artist_popularity = 50  # default — real value needs Spotify API
-    mainstream_pct = 0
+    avg_artist_popularity = 50
+    mainstream_pct        = 0
 
-    # playlist staleness
-    playlist_staleness = 0.0
+    playlist_staleness     = 0.0
     playlist_concentration = 0.0
-    stale_playlist_pct = 0.0
+    stale_playlist_pct     = 0.0
     if playlists:
         try:
-            import datetime
             now_year = yr_max
-            stale = 0
+            stale    = 0
             for pl in playlists:
                 tracks = pl.get('items', [])
                 if not tracks: continue
                 last_added = max(
-                    (t.get('addedDate', '') or '' for t in tracks),
-                    default=''
+                    (t.get('addedDate', '') or '' for t in tracks), default=''
                 )
                 if last_added and int(last_added[:4]) < now_year - 2:
                     stale += 1
-            playlist_staleness = stale / max(len(playlists), 1)
-            stale_playlist_pct = round(playlist_staleness * 100)
-            # concentration: % plays from top 3 playlists (approximate)
+            playlist_staleness     = stale / max(len(playlists), 1)
+            stale_playlist_pct     = round(playlist_staleness * 100)
             playlist_concentration = min(playlist_staleness, 1.0)
         except:
             pass
 
-    # ── 5 dimension scores ──────────────────────────────────────────────
     diversity      = round(min(art_per_100h / 120, 1.0) * 20)
     depth          = round(min(top50_hours / 25, 1.0) * 20)
     intent_raw     = (1 - skip_rate/100) * 0.55 + repeat_rate * 0.45
@@ -235,9 +227,7 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     }
 
     archetype = get_archetype(dims, stats)
-
-    return {**stats, **dims, 'total': total,
-            'archetype': archetype, 'dims': dims}
+    return {**stats, **dims, 'total': total, 'archetype': archetype, 'dims': dims}
 
 def score_label(total):
     if total >= 85: return "Legendary", GREEN
@@ -256,17 +246,22 @@ def _dim_bars(s):
     ]
     html = ""
     for name, val, icon, detail in dims:
-        pct = int(val / 20 * 100)
+        pct       = int(val / 20 * 100)
         bar_color = GREEN if pct >= 80 else VIOLET_LIGHT if pct >= 50 else AMBER if pct >= 30 else "#444"
         html += (
-            "<div style='margin-bottom:11px;'>"
-            "<div style='display:flex;justify-content:space-between;margin-bottom:3px;'>"
+            "<div style='margin-bottom:13px;'>"
+            "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;'>"
             "<span style='font-size:.8em;color:#aaa;font-weight:600;'>" + icon + " " + name + "</span>"
-            "<span style='font-size:.75em;color:#555;'>" + detail + "</span>"
+            "<div style='display:flex;align-items:center;gap:10px;'>"
+            "<span style='font-size:.72em;color:#555;'>" + detail + "</span>"
+            "<span style='font-size:.8em;font-weight:900;color:" + bar_color + ";min-width:36px;text-align:right;'>"
+            + str(val) + "/20</span>"
+            "</div>"
             "</div>"
             "<div style='background:#1a1a1a;border-radius:4px;height:7px;'>"
             "<div style='background:" + bar_color + ";border-radius:4px;height:7px;width:" + str(pct) + "%;'></div>"
-            "</div></div>"
+            "</div>"
+            "</div>"
         )
     return html
 
@@ -284,30 +279,43 @@ def render(dfm, dfd=None, lib=None, playlists=None):
     st.markdown(
         "<div style='background:linear-gradient(135deg,#060610,#0d0020);"
         "border:2px solid " + color + "33;border-radius:20px;padding:28px 32px;margin-bottom:6px;'>"
-        "<div style='display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:24px;margin-bottom:20px;'>"
+        "<div style='display:flex;justify-content:space-between;align-items:flex-start;"
+        "flex-wrap:wrap;gap:24px;margin-bottom:20px;'>"
         "<div>"
-        "<div style='font-size:.68em;color:#444;text-transform:uppercase;letter-spacing:.14em;margin-bottom:6px;'>MusicDNA Score</div>"
-        "<div style='font-size:4.5em;font-weight:900;color:" + color + ";line-height:1;'>" + str(s['total']) + "</div>"
+        "<div style='font-size:.68em;color:#888;text-transform:uppercase;"
+        "letter-spacing:.14em;margin-bottom:6px;'>MusicDNA Score</div>"
+        "<div style='font-size:4.5em;font-weight:900;color:" + color + ";line-height:1;'>"
+        + str(s['total']) + "</div>"
         "<div style='color:#555;font-size:.8em;margin-top:3px;'>/100</div>"
         "<div style='margin-top:10px;'>"
-        "<span style='background:" + color + "22;color:" + color + ";font-weight:800;font-size:.82em;padding:4px 14px;border-radius:20px;'>" + lbl + " Listener</span>"
+        "<span style='background:" + color + "22;color:" + color + ";font-weight:800;"
+        "font-size:.82em;padding:4px 14px;border-radius:20px;'>" + lbl + " Listener</span>"
         "</div></div>"
-        "<div style='flex:1;min-width:220px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:14px;padding:18px;'>"
-        "<div style='font-size:.68em;color:#444;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;'>Your Archetype</div>"
+        "<div style='flex:1;min-width:220px;background:#0a0a0a;border:1px solid #1e1e1e;"
+        "border-radius:14px;padding:18px;'>"
+        "<div style='font-size:.68em;color:#888;text-transform:uppercase;"
+        "letter-spacing:.1em;margin-bottom:8px;'>Your Archetype</div>"
         "<div style='font-size:2em;margin-bottom:4px;'>" + arch['emoji'] + "</div>"
-        "<div style='font-size:1.1em;font-weight:900;color:#fff;margin-bottom:8px;'>" + arch['name'] + "</div>"
-        "<div style='color:#555;font-size:.8em;line-height:1.6;font-style:italic;'>" + _fmt(arch['data_line'], s) + "</div>"
+        "<div style='font-size:1.1em;font-weight:900;color:#fff;margin-bottom:8px;'>"
+        + arch['name'] + "</div>"
+        "<div style='color:#888;font-size:.8em;line-height:1.6;font-style:italic;'>"
+        + _fmt(arch['data_line'], s) + "</div>"
         "</div></div>"
         "<div>" + _dim_bars(s) + "</div>"
         "</div>",
         unsafe_allow_html=True
     )
 
-    dims = s['dims']
+    dims     = s['dims']
     strongest = max(dims, key=dims.get)
     weakest   = min(dims, key=dims.get)
-    labels = {'diversity':'breadth of taste','depth':'depth per artist',
-              'intentionality':'intentional listening','discovery':'discovery rate','loyalty':'long-term loyalty'}
+    labels = {
+        'diversity':      'breadth of taste',
+        'depth':          'depth per artist',
+        'intentionality': 'intentional listening',
+        'discovery':      'discovery rate',
+        'loyalty':        'long-term loyalty',
+    }
     total = s['total']
     if total >= 85:   verdict = "Top 1% listener globally. " + labels[strongest].capitalize() + " is your defining edge."
     elif total >= 70: verdict = "Expert listener. " + labels[strongest].capitalize() + " is exceptional. " + labels[weakest].capitalize() + " is the only gap."
@@ -316,7 +324,8 @@ def render(dfm, dfd=None, lib=None, playlists=None):
     else:             verdict = "Casual listener. Your strongest asset is " + labels[strongest] + "."
 
     st.markdown(
-        "<div style='color:#444;font-size:.82em;font-style:italic;text-align:center;margin-bottom:20px;padding:0 20px;'>"
+        "<div style='color:#555;font-size:.82em;font-style:italic;"
+        "text-align:center;margin-bottom:20px;padding:0 20px;'>"
         + verdict + "</div>",
         unsafe_allow_html=True
     )
