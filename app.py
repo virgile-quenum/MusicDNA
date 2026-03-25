@@ -195,8 +195,9 @@ if (not st.session_state.data_loaded
         st.rerun()
 
 SECTION_YOUR_STORY = ["Overview", "Musical Horoscope", "Celebrity Twin"]
-SECTION_DEEP_DIVES = ["Artists and Tracks", "Likes Autopsy", "Playlist Autopsy", "Time Patterns", "Podcast Autopsy"]
-SECTION_FORGOTTEN  = ["Forgotten", "Explore"]
+SECTION_DEEP_DIVES = ["Artists and Tracks", "Likes Autopsy", "Playlist Autopsy",
+                      "Time Patterns", "Podcast Autopsy"]
+SECTION_FORGOTTEN  = ["Forgotten", "Explore", "The Witness"]
 SECTION_DARK_SIDE  = ["Hall of Shame", "Parent Mode"]
 PAGES_FULL_DNA     = ["Genre Profile"]
 
@@ -373,6 +374,7 @@ elif "Likes Autopsy"      in page: import likes_autopsy;    likes_autopsy.render
 elif "Playlist Autopsy"   in page: import playlist_autopsy; playlist_autopsy.render(dfm, playlists)
 elif "Explore"            in page: import explore;          explore.render(dfm)
 elif "Forgotten"          in page: import forgotten;        forgotten.render(dfm)
+elif "The Witness"        in page: import witness;          witness.render(dfm, dfd)
 elif "Hall of Shame"      in page: import hall_of_shame;    hall_of_shame.render(dfm, lib, playlists)
 elif "Parent Mode"        in page: import parent_mode;      parent_mode.render(dfm, dfd, [])
 elif "Celebrity Twin"     in page: import celebrity_twin;   celebrity_twin.render(dfm)
