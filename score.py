@@ -94,6 +94,14 @@ def get_archetype(dims, stats):
             "prediction":"Your listening will intensify before it stabilises. Something is unresolved. Music knows before you do.",
             "data_line":"{night_pct:.0f}% after 10pm · {binge_sessions} binge sessions · peak {peak_hour:02d}h."}
 
+    # ── Nouveau archetype : The Looper ────────────────────────────────────
+    if u.get("avg_plays_per_track", 0) > 15 and u.get("top_unique_tracks_avg", 0) < 20:
+        return {"key":"the_looper","name":"The Looper","emoji":"🔂",
+            "curse":"Your top artists average {avg_plays_per_track:.0f} plays per track. You do not explore discographies — you exhaust individual songs. You have heard the same track more times than the artist has performed it live.",
+            "gift":"You find the exact version of a feeling and you stay there. Most people move on before they understand what they found.",
+            "prediction":"You will discover a new track this year that you play 40 times in two weeks. You will not notice until someone points it out.",
+            "data_line":"Avg {avg_plays_per_track:.0f} plays/track · {top_unique_tracks_avg:.0f} unique tracks per top artist."}
+
     return {"key":"deliberate_listener","name":"The Deliberate Listener","emoji":"🎯",
         "curse":"No single pathology dominates your listening. {unique_artists:,} artists, {n_years} years, no obvious obsession or avoidance. This is either extremely healthy or extremely boring. Probably both.",
         "gift":"Genuine balance is rarer than any extreme. The algorithm has no idea what to do with you.",
@@ -113,6 +121,7 @@ ALL_ARCHETYPES = [
     {"key":"obsessive",           "name":"The Obsessive",            "emoji":"🌀", "desc":"Binge, exhaust, move on."},
     {"key":"passive_loyalist",    "name":"The Passive Loyalist",     "emoji":"💤", "desc":"Loyal but not really listening."},
     {"key":"binge_escaper",       "name":"The Binge Escaper",        "emoji":"🌙", "desc":"Music as a place to disappear."},
+    {"key":"the_looper",          "name":"The Looper",               "emoji":"🔂", "desc":"Same tracks, infinite plays. Discographies unexplored."},
     {"key":"deliberate_listener", "name":"The Deliberate Listener",  "emoji":"🎯", "desc":"No dominant pattern. Rare."},
 ]
 
@@ -136,10 +145,10 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     top_artist_pct = top_artist_ms / dfm['ms'].sum() * 100 if dfm['ms'].sum() > 0 else 0
     top_artist_h   = top_artist_ms / 3600000
 
-    skip_rate      = dfm['skipped'].mean() * 100 if 'skipped' in dfm.columns else 20
-    shuffle_pct    = dfm['shuffle'].mean() * 100 if 'shuffle' in dfm.columns else 0
-    track_counts   = dfm.groupby('trackName').size()
-    repeat_rate    = (track_counts > 1).sum() / max(len(track_counts), 1)
+    skip_rate    = dfm['skipped'].mean() * 100 if 'skipped' in dfm.columns else 20
+    shuffle_pct  = dfm['shuffle'].mean() * 100 if 'shuffle' in dfm.columns else 0
+    track_counts = dfm.groupby('trackName').size()
+    repeat_rate  = (track_counts > 1).sum() / max(len(track_counts), 1)
 
     top50_hours  = dfm.groupby('artistName')['ms'].sum().nlargest(50).mean() / 3600000
     art_per_100h = (my_art / my_h * 100) if my_h > 0 else 0
@@ -157,6 +166,7 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     old_music_pct = dfm[dfm['artistName'].isin(old_artists)]['ms'].sum() / dfm['ms'].sum() * 100
 
     tracks_per_artist = dfm['trackName'].nunique() / max(my_art, 1)
+
     df_s = dfm.sort_values('ts').copy()
     df_s['gap'] = df_s['ts'].diff().dt.total_seconds().fillna(0)
     df_s['sid'] = (df_s['gap'] > 1800).cumsum()
@@ -173,9 +183,8 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
         k = dfd.groupby('year')['ms'].sum()
         kids_peak_year = int(k.idxmax()) if not k.empty else yr_max
 
-    avg_artist_popularity = 50
-    mainstream_pct        = 0
-
+    avg_artist_popularity  = 50
+    mainstream_pct         = 0
     playlist_staleness     = 0.0
     playlist_concentration = 0.0
     stale_playlist_pct     = 0.0
@@ -197,8 +206,31 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
         except:
             pass
 
+    # ── Discography depth — nouvelle métrique ─────────────────────────────
+    # Pour les top 20 artistes par heures : unique tracks et plays/track
+    artist_detail = dfm.groupby('artistName').agg(
+        _hours        =('ms', lambda x: x.sum()/3600000),
+        _total_plays  =('trackName', 'count'),
+        _unique_tracks=('trackName', 'nunique'),
+    )
+    top20_artists = artist_detail.nlargest(20, '_hours')
+    top20_artists['_plays_per_track'] = (
+        top20_artists['_total_plays'] / top20_artists['_unique_tracks']
+    )
+    avg_plays_per_track   = round(top20_artists['_plays_per_track'].mean(), 1)
+    top_unique_tracks_avg = round(top20_artists['_unique_tracks'].mean(), 1)
+
+    # Depth score — combinaison heures (loyauté) + tracks uniques (exploration)
+    # Benchmark : bon explorateur = 30+ tracks uniques par artiste top
+    # Benchmark : plays/track sain = <10 (tu explores plutôt que boucler)
+    loyalty_score     = min(top50_hours / 25, 1.0)          # heures sur top 50
+    exploration_score = min(top_unique_tracks_avg / 30, 1.0) # tracks uniques top 20
+    loop_penalty      = max(0, (avg_plays_per_track - 10) / 40)  # pénalité si boucle
+    depth_raw         = (loyalty_score * 0.4 + exploration_score * 0.6) - loop_penalty
+    depth             = round(max(min(depth_raw, 1.0), 0.0) * 20)
+
+    # Autres dimensions inchangées
     diversity      = round(min(art_per_100h / 120, 1.0) * 20)
-    depth          = round(min(top50_hours / 25, 1.0) * 20)
     intent_raw     = (1 - skip_rate/100) * 0.55 + repeat_rate * 0.45
     intentionality = round(min(intent_raw / 0.75, 1.0) * 20)
     discovery      = round(min(new_per_year / 380, 1.0) * 20)
@@ -224,6 +256,9 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
         'avg_artist_popularity': avg_artist_popularity, 'mainstream_pct': mainstream_pct,
         'playlist_staleness': playlist_staleness, 'playlist_concentration': playlist_concentration,
         'stale_playlist_pct': stale_playlist_pct, 'proj_new': int(my_art / n_years),
+        # nouvelles stats depth
+        'avg_plays_per_track':   avg_plays_per_track,
+        'top_unique_tracks_avg': top_unique_tracks_avg,
     }
 
     archetype = get_archetype(dims, stats)
@@ -238,11 +273,17 @@ def score_label(total):
 
 def _dim_bars(s):
     dims = [
-        ("Diversity",      s['diversity'],      "🌍", str(s['art_per_100h']) + " artists/100h"),
-        ("Depth",          s['depth'],          "🔬", str(s['top50_hours']) + "h avg on top artists"),
-        ("Intentionality", s['intentionality'], "🎯", str(s['skip_rate']) + "% skip · " + str(s['repeat_rate']) + "% repeat"),
-        ("Discovery",      s['discovery'],      "🔭", str(s['avg_new']) + " new artists/year"),
-        ("Loyalty",        s['loyalty'],        "❤️",  str(s['loyalty_years']) + "yr weighted avg"),
+        ("Diversity",      s['diversity'],      "🌍",
+         str(s['art_per_100h']) + " artists/100h"),
+        ("Depth",          s['depth'],          "🔬",
+         str(s['top_unique_tracks_avg']) + " uniq tracks · " +
+         str(s['avg_plays_per_track']) + "x/track"),
+        ("Intentionality", s['intentionality'], "🎯",
+         str(s['skip_rate']) + "% skip · " + str(s['repeat_rate']) + "% repeat"),
+        ("Discovery",      s['discovery'],      "🔭",
+         str(s['avg_new']) + " new artists/year"),
+        ("Loyalty",        s['loyalty'],        "❤️",
+         str(s['loyalty_years']) + "yr weighted avg"),
     ]
     html = ""
     for name, val, icon, detail in dims:
@@ -256,12 +297,10 @@ def _dim_bars(s):
             "<span style='font-size:.72em;color:#555;'>" + detail + "</span>"
             "<span style='font-size:.8em;font-weight:900;color:" + bar_color + ";min-width:36px;text-align:right;'>"
             + str(val) + "/20</span>"
-            "</div>"
-            "</div>"
+            "</div></div>"
             "<div style='background:#1a1a1a;border-radius:4px;height:7px;'>"
             "<div style='background:" + bar_color + ";border-radius:4px;height:7px;width:" + str(pct) + "%;'></div>"
-            "</div>"
-            "</div>"
+            "</div></div>"
         )
     return html
 
@@ -306,12 +345,12 @@ def render(dfm, dfd=None, lib=None, playlists=None):
         unsafe_allow_html=True
     )
 
-    dims     = s['dims']
+    dims      = s['dims']
     strongest = max(dims, key=dims.get)
     weakest   = min(dims, key=dims.get)
     labels = {
         'diversity':      'breadth of taste',
-        'depth':          'depth per artist',
+        'depth':          'discography exploration',
         'intentionality': 'intentional listening',
         'discovery':      'discovery rate',
         'loyalty':        'long-term loyalty',
