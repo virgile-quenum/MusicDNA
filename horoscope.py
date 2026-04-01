@@ -1,11 +1,73 @@
 import streamlit as st
 import pandas as pd
+from collections import defaultdict
+import time
 
 VIOLET       = "#7C3AED"
 VIOLET_LIGHT = "#A78BFA"
 GREEN        = "#1DB954"
 AMBER        = "#f59e0b"
 RED          = "#f87171"
+
+GENRE_COLORS = {
+    "Hip-Hop / Rap":      "#f87171",
+    "R&B / Soul":         "#A78BFA",
+    "Jazz / Folk":        "#60a5fa",
+    "Reggae / Dancehall": "#1DB954",
+    "Afro":               "#f59e0b",
+    "Caribbean":          "#f472b6",
+    "Brazilian":          "#34d399",
+    "Pop":                "#888",
+    "Electronic":         "#818cf8",
+    "Rock / Indie":       "#fb923c",
+    "Classical / World":  "#94a3b8",
+    "Other":              "#444",
+}
+
+GENRE_MAP = {
+    "hip-hop": "Hip-Hop / Rap", "hip hop": "Hip-Hop / Rap", "rap": "Hip-Hop / Rap",
+    "rap français": "Hip-Hop / Rap", "french rap": "Hip-Hop / Rap", "trap": "Hip-Hop / Rap",
+    "gangsta rap": "Hip-Hop / Rap", "east coast rap": "Hip-Hop / Rap",
+    "west coast rap": "Hip-Hop / Rap", "conscious hip hop": "Hip-Hop / Rap",
+    "r&b": "R&B / Soul", "rnb": "R&B / Soul", "soul": "R&B / Soul",
+    "neo soul": "R&B / Soul", "contemporary r&b": "R&B / Soul",
+    "motown": "R&B / Soul", "funk": "R&B / Soul",
+    "jazz": "Jazz / Folk", "folk": "Jazz / Folk", "folk jazz": "Jazz / Folk",
+    "acoustic": "Jazz / Folk", "singer-songwriter": "Jazz / Folk",
+    "blues": "Jazz / Folk", "delta blues": "Jazz / Folk",
+    "electric blues": "Jazz / Folk", "chicago blues": "Jazz / Folk",
+    "reggae": "Reggae / Dancehall", "dancehall": "Reggae / Dancehall",
+    "roots reggae": "Reggae / Dancehall", "lovers rock": "Reggae / Dancehall",
+    "ragga": "Reggae / Dancehall", "ska": "Reggae / Dancehall", "dub": "Reggae / Dancehall",
+    "afrobeats": "Afro", "afropop": "Afro", "afro pop": "Afro",
+    "afrobeat": "Afro", "african": "Afro", "afro": "Afro",
+    "highlife": "Afro", "afro-beat": "Afro", "naija": "Afro", "nigerian pop": "Afro",
+    "kompa": "Caribbean", "zouk": "Caribbean", "haitian": "Caribbean",
+    "caribbean": "Caribbean", "soca": "Caribbean", "bouyon": "Caribbean",
+    "gwoka": "Caribbean", "biguine": "Caribbean",
+    "brazilian": "Brazilian", "samba": "Brazilian", "pagode": "Brazilian",
+    "axé": "Brazilian", "forró": "Brazilian", "bossa nova": "Brazilian",
+    "mpb": "Brazilian", "sertanejo": "Brazilian",
+    "pop": "Pop", "dance pop": "Pop", "electropop": "Pop",
+    "synthpop": "Pop", "teen pop": "Pop",
+    "electronic": "Electronic", "house": "Electronic", "techno": "Electronic",
+    "edm": "Electronic", "dance": "Electronic", "club": "Electronic",
+    "rock": "Rock / Indie", "indie": "Rock / Indie", "indie rock": "Rock / Indie",
+    "alternative": "Rock / Indie", "classic rock": "Rock / Indie", "britpop": "Rock / Indie",
+    "classical": "Classical / World", "world": "Classical / World",
+    "world music": "Classical / World", "latin": "Classical / World",
+    "salsa": "Classical / World", "cumbia": "Classical / World",
+}
+
+def _map_tags(tags):
+    for tag in tags:
+        t = tag.lower().strip()
+        if t in GENRE_MAP:
+            return GENRE_MAP[t]
+        for key, genre in GENRE_MAP.items():
+            if key in t or t in key:
+                return genre
+    return "Other"
 
 def _fmt(template, stats):
     try: return template.format(**stats)
@@ -31,7 +93,6 @@ def _quiz():
         "</div>",
         unsafe_allow_html=True
     )
-
     q1 = st.text_input(
         "Your #1 artist all-time according to you:",
         placeholder="e.g. Taylor Swift",
@@ -52,7 +113,6 @@ def _quiz():
          "Evening (6pm-10pm)", "Night (after 10pm)"],
         key="quiz_time_input"
     )
-
     if st.button("Reveal my sign →", type="primary", use_container_width=True):
         if q2 == "— pick one —" or q3 == "— pick one —":
             st.warning("Answer all 3 questions first.")
@@ -67,17 +127,16 @@ def _gap_analysis(s):
     quiz_artist = st.session_state.get('quiz_artist_save', '')
     quiz_style  = st.session_state.get('quiz_style_save', '')
     quiz_time   = st.session_state.get('quiz_time_save', '')
-
     gaps = []
 
     real_artist = str(s.get('top_artist', ''))
     confirmed   = quiz_artist.strip().lower() == real_artist.lower() if quiz_artist.strip() else False
     gaps.append({
-        "label":     "Your #1 artist",
-        "you_said":  quiz_artist.strip() or "—",
+        "label": "Your #1 artist",
+        "you_said": quiz_artist.strip() or "—",
         "data_says": real_artist + " (" + str(round(s.get('top_artist_h', 0))) + "h)",
-        "verdict":   "You know yourself. Rare." if confirmed else
-                     "You said one name. Your data said another. That gap is the whole point of this app.",
+        "verdict": "You know yourself. Rare." if confirmed else
+                   "You said one name. Your data said another. That gap is the whole point of this app.",
         "ok": confirmed,
     })
 
@@ -88,7 +147,7 @@ def _gap_analysis(s):
         "Eclectic — I genuinely listen to everything": ("eclectic",
             s.get('unique_artists', 0) > 3000 and s.get('tracks_per_artist', 10) > 3),
     }
-    sel        = style_map.get(quiz_style, ("unknown", False))
+    sel = style_map.get(quiz_style, ("unknown", False))
     style_key, style_ok = sel
     style_reality = {
         "explorer": str(int(s.get('art_per_year', 0))) + " new artists/year. " +
@@ -102,10 +161,10 @@ def _gap_analysis(s):
                     ("Genuinely eclectic." if style_ok else "Wide but shallow. The Fake Eclectic is calling."),
     }
     gaps.append({
-        "label":     "Your listening style",
-        "you_said":  quiz_style.split(" — ")[0] if " — " in quiz_style else quiz_style,
+        "label": "Your listening style",
+        "you_said": quiz_style.split(" — ")[0] if " — " in quiz_style else quiz_style,
         "data_says": style_reality.get(style_key, "Data says it's complicated."),
-        "verdict":   "Confirmed." if style_ok else "Your data disagrees.",
+        "verdict": "Confirmed." if style_ok else "Your data disagrees.",
         "ok": style_ok,
     })
 
@@ -119,10 +178,10 @@ def _gap_analysis(s):
     time_key = quiz_time.split(" (")[0] if " (" in quiz_time else quiz_time
     time_ok  = time_map.get(quiz_time, False)
     gaps.append({
-        "label":     "When you listen",
-        "you_said":  time_key,
+        "label": "When you listen",
+        "you_said": time_key,
         "data_says": str(peak_h).zfill(2) + "h is your actual peak hour.",
-        "verdict":   "Confirmed." if time_ok else "Your peak hour tells a different story.",
+        "verdict": "Confirmed." if time_ok else "Your peak hour tells a different story.",
         "ok": time_ok,
     })
 
@@ -153,6 +212,178 @@ def _gap_analysis(s):
             unsafe_allow_html=True
         )
 
+# ── Genre tab ─────────────────────────────────────────────────────────────────
+
+def _render_genres(dfm):
+    """Inline genre profile for the Horoscope tab."""
+
+    try:
+        import lastfm
+        if not lastfm.is_available():
+            st.markdown(
+                "<div style='background:#0f0f0f;border:1px solid #f59e0b33;"
+                "border-left:3px solid #f59e0b;border-radius:8px;padding:14px;'>"
+                "<div style='color:#f59e0b;font-size:.78em;font-weight:700;"
+                "margin-bottom:6px;'>Last.fm not configured</div>"
+                "<div style='color:#888;font-size:.82em;'>"
+                "Add LASTFM_API_KEY to your Railway environment variables to enable genre detection."
+                "</div></div>",
+                unsafe_allow_html=True
+            )
+            return
+    except ImportError:
+        st.error("lastfm.py not found.")
+        return
+
+    cache_key = "genre_inline_data"
+    if cache_key not in st.session_state:
+        kids_kw = ['bébé','baby','lullaby','titounis','mancebo','bernardo','celesti',
+                   'mclaughlin','moons','kiboomers','teddy','wonderland','comptines',
+                   'petit ours','ainsi font','percussioney','batukem','tukada',
+                   'música para bebés','alain royer','miracle tones']
+        def is_kids(n): return any(k in n.lower() for k in kids_kw)
+        df_c = dfm[~dfm['artistName'].apply(is_kids)]
+
+        top_artists = (
+            df_c.groupby('artistName')['ms'].sum() / 3600000
+        ).nlargest(150)
+
+        genre_hours   = defaultdict(float)
+        artist_genres = {}
+        yearly_genres = defaultdict(lambda: defaultdict(float))
+
+        bar = st.progress(0, text="Detecting genres via Last.fm...")
+        for i, (artist, hours) in enumerate(top_artists.items()):
+            info  = lastfm.get_artist_info(artist)
+            genre = _map_tags(info.get("tags", [])) or "Other"
+            artist_genres[artist] = genre
+            genre_hours[genre]   += hours
+
+            sub = df_c[df_c['artistName'] == artist]
+            for yr, grp in sub.groupby('year'):
+                yearly_genres[yr][genre] += grp['ms'].sum() / 3600000
+
+            bar.progress((i + 1) / len(top_artists),
+                         text=f"Last.fm — {artist[:30]}...")
+            time.sleep(0.12)
+        bar.empty()
+
+        st.session_state[cache_key] = {
+            "genre_hours":   dict(genre_hours),
+            "artist_genres": artist_genres,
+            "yearly_genres": {yr: dict(v) for yr, v in yearly_genres.items()},
+        }
+
+    data          = st.session_state[cache_key]
+    genre_hours   = data["genre_hours"]
+    artist_genres = data["artist_genres"]
+    yearly_genres = data["yearly_genres"]
+
+    total_h       = sum(genre_hours.values())
+    if total_h == 0:
+        st.info("No genre data detected.")
+        return
+
+    sorted_genres = sorted(genre_hours.items(), key=lambda x: -x[1])
+    top_genres    = [g for g, h in sorted_genres if g != "Other"][:6]
+
+    # ── Top genres hero ───────────────────────────────────────────────────
+    st.markdown(
+        "<div style='color:#A78BFA;font-size:.72em;font-weight:700;"
+        "text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;'>"
+        "Your dominant genres</div>",
+        unsafe_allow_html=True
+    )
+
+    cols = st.columns(min(len(sorted_genres[:4]), 4))
+    for col, (genre, hours) in zip(cols, sorted_genres[:4]):
+        pct   = round(hours / total_h * 100)
+        color = GENRE_COLORS.get(genre, "#888")
+        with col:
+            st.markdown(
+                "<div style='background:#0f0f0f;border:1px solid #1e1e1e;"
+                "border-left:3px solid " + color + ";border-radius:10px;"
+                "padding:14px;text-align:center;'>"
+                "<div style='font-size:1.4em;font-weight:900;color:" + color + ";'>"
+                + str(pct) + "%</div>"
+                "<div style='font-size:.75em;color:#fff;font-weight:700;margin:4px 0;'>"
+                + genre + "</div>"
+                "<div style='font-size:.68em;color:#555;'>" + str(round(hours)) + "h</div>"
+                "</div>",
+                unsafe_allow_html=True
+            )
+
+    st.markdown("<div style='margin:16px 0 8px;'></div>", unsafe_allow_html=True)
+
+    # ── All genres bar ────────────────────────────────────────────────────
+    for genre, hours in sorted_genres:
+        if hours < 1: continue
+        pct   = round(hours / total_h * 100)
+        bar_w = min(pct * 2, 100)
+        color = GENRE_COLORS.get(genre, "#444")
+        st.markdown(
+            "<div style='margin-bottom:8px;'>"
+            "<div style='display:flex;justify-content:space-between;"
+            "align-items:center;margin-bottom:3px;'>"
+            "<span style='font-size:.82em;color:#ccc;font-weight:600;'>" + genre + "</span>"
+            "<span style='font-size:.78em;color:" + color + ";font-weight:700;'>"
+            + str(round(hours)) + "h · " + str(pct) + "%</span>"
+            "</div>"
+            "<div style='background:#1a1a1a;border-radius:3px;height:5px;'>"
+            "<div style='background:" + color + ";width:" + str(bar_w) + "%;"
+            "height:5px;border-radius:3px;'></div>"
+            "</div></div>",
+            unsafe_allow_html=True
+        )
+
+    st.markdown("---")
+
+    # ── Evolution by year ─────────────────────────────────────────────────
+    st.markdown(
+        "<div style='color:#A78BFA;font-size:.72em;font-weight:700;"
+        "text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;'>"
+        "Evolution by year</div>",
+        unsafe_allow_html=True
+    )
+
+    years_desc = sorted(yearly_genres.keys(), reverse=True)
+    for yr in years_desc:
+        yr_data  = yearly_genres[yr]
+        yr_total = sum(yr_data.values())
+        if yr_total < 10: continue
+
+        top3_yr = sorted(yr_data.items(), key=lambda x: -x[1])[:3]
+        badges  = ""
+        for genre, hours in top3_yr:
+            pct   = round(hours / yr_total * 100)
+            if pct < 5: continue
+            color = GENRE_COLORS.get(genre, "#444")
+            badges += (
+                "<span style='color:" + color + ";font-size:.72em;font-weight:700;"
+                "background:" + color + "22;padding:2px 8px;border-radius:8px;"
+                "margin-right:5px;'>" + genre + " " + str(pct) + "%</span>"
+            )
+
+        st.markdown(
+            "<div style='display:flex;align-items:center;gap:12px;"
+            "padding:8px 0;border-bottom:1px solid #1a1a1a;'>"
+            "<span style='font-size:.85em;font-weight:900;color:#fff;"
+            "min-width:36px;'>" + str(yr) + "</span>"
+            "<div style='flex:1;'>" + badges + "</div>"
+            "<span style='color:#444;font-size:.72em;'>"
+            + str(round(yr_total)) + "h</span>"
+            "</div>",
+            unsafe_allow_html=True
+        )
+
+    st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+    if st.button("Refresh genre data", key="refresh_genres"):
+        if cache_key in st.session_state:
+            del st.session_state[cache_key]
+        st.rerun()
+
+# ── Main render ───────────────────────────────────────────────────────────────
+
 def render(dfm, dfd=None, lib=None, playlists=None):
     st.title("🔮 Musical Horoscope")
     st.markdown("*Your musical sign — derived from actual behaviour, not vibes.*")
@@ -174,7 +405,7 @@ def render(dfm, dfd=None, lib=None, playlists=None):
         st.session_state['gap_shown'] = True
         st.markdown("---")
 
-    tab1, tab2 = st.tabs(["Your Sign", "All Signs"])
+    tab1, tab2, tab3 = st.tabs(["Your Sign", "All Signs", "🎼 Your Genres"])
 
     with tab1:
         st.markdown(
@@ -243,7 +474,7 @@ def render(dfm, dfd=None, lib=None, playlists=None):
 
     with tab2:
         from score import ALL_ARCHETYPES
-        st.markdown("### All 13 Musical Signs")
+        st.markdown("### All 14 Musical Signs")
         st.caption("Which ones are close to you?")
         cols = st.columns(2)
         for i, a in enumerate(ALL_ARCHETYPES):
@@ -265,3 +496,13 @@ def render(dfm, dfd=None, lib=None, playlists=None):
                     "</div>",
                     unsafe_allow_html=True
                 )
+
+    with tab3:
+        st.markdown(
+            "<div style='color:#888;font-size:.82em;margin-bottom:16px;line-height:1.6;'>"
+            "Your dominant genres — detected from Last.fm tags on your top 150 artists. "
+            "Takes ~20 seconds on first load. Cached for the rest of the session."
+            "</div>",
+            unsafe_allow_html=True
+        )
+        _render_genres(dfm)
