@@ -9,6 +9,7 @@ Prefetch contract:
   session_state['who_narrative'] — set lazily on first render, cached after
 """
 
+import os
 import streamlit as st
 import pandas as pd
 import requests
@@ -336,25 +337,31 @@ Write a behavioral portrait in exactly 5 sentences. Rules:
 
 Return only the 5 sentences, no preamble, no formatting."""
 
-    try:
-        response = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={"Content-Type": "application/json"},
-            json={
-                "model":    "claude-sonnet-4-20250514",
-                "max_tokens": 400,
-                "messages": [{"role": "user", "content": prompt}],
-            },
-            timeout=30,
-        )
-        if response.status_code == 200:
-            text = response.json()["content"][0]["text"].strip()
-            st.session_state['who_narrative'] = text
-            return text
-    except Exception:
-        pass
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if api_key:
+        try:
+            response = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "Content-Type":      "application/json",
+                    "x-api-key":         api_key,
+                    "anthropic-version": "2023-06-01",
+                },
+                json={
+                    "model":      "claude-sonnet-4-20250514",
+                    "max_tokens": 400,
+                    "messages":   [{"role": "user", "content": prompt}],
+                },
+                timeout=30,
+            )
+            if response.status_code == 200:
+                text = response.json()["content"][0]["text"].strip()
+                st.session_state['who_narrative'] = text
+                return text
+        except Exception:
+            pass
 
-    # ── Fallback rule-based ───────────────────────────────────────────────
+    # ── Fallback rule-based (no key or API error) ─────────────────────────
     lines = [
         (f"{traits['n_years']} years of data, {traits['new_per_year']} new artists per year. "
          + ("Wide and restless." if traits['exploration_score'] > 60 else "Focused and selective.")),
