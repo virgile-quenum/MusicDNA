@@ -131,12 +131,10 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     if dfm is None or dfm.empty:
         return None
 
-    # ── Base temporelle ────────────────────────────────────────────────────
     yr_min  = int(dfm['year'].min())
     yr_max  = int(dfm['year'].max())
     n_years = max(yr_max - yr_min + 1, 1)
 
-    # ── Totaux globaux ─────────────────────────────────────────────────────
     my_ms     = dfm['ms'].sum()
     my_h      = my_ms / 3_600_000
     kids_ms   = dfd['ms'].sum() if dfd is not None and not dfd.empty else 0
@@ -144,13 +142,12 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     total_all = my_h + kids_h
     kids_pct  = kids_h / total_all * 100 if total_all > 0 else 0
 
-    # ── Un seul groupby artiste — couvre artist_ms ET artist_detail ───────
     artist_agg = dfm.groupby('artistName').agg(
         _ms           =('ms', 'sum'),
         _total_plays  =('trackName', 'count'),
         _unique_tracks=('trackName', 'nunique'),
     )
-    artist_agg['_hours']          = artist_agg['_ms'] / 3_600_000
+    artist_agg['_hours']           = artist_agg['_ms'] / 3_600_000
     artist_agg['_plays_per_track'] = artist_agg['_total_plays'] / artist_agg['_unique_tracks']
 
     artist_ms      = artist_agg['_ms']
@@ -159,7 +156,6 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     top_artist_pct = top_artist_ms / my_ms * 100 if my_ms > 0 else 0
     top_artist_h   = top_artist_ms / 3_600_000
 
-    # ── Comportement d'écoute ──────────────────────────────────────────────
     skip_rate   = dfm['skipped'].mean() * 100 if 'skipped' in dfm.columns else 20
     shuffle_pct = dfm['shuffle'].mean() * 100  if 'shuffle' in dfm.columns else 0
 
@@ -168,7 +164,6 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
 
     top50_hours = artist_agg['_hours'].nlargest(50).mean()
 
-    # ── Nouveaux artistes par an — O(n) au lieu de O(n²) ──────────────────
     seen        = set()
     new_counts  = []
     for yr in sorted(dfm['year'].unique()):
@@ -177,29 +172,24 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
         seen |= yr_artists
     new_per_year = sum(new_counts) / max(len(new_counts), 1)
 
-    # ── Loyauté pondérée ──────────────────────────────────────────────────
     artist_years     = dfm.groupby('artistName')['year'].nunique()
     loyalty_weighted = (artist_years * artist_ms).sum() / max(artist_ms.sum(), 1)
 
-    # ── Musique ancienne ──────────────────────────────────────────────────
-    first_seen  = dfm.groupby('artistName')['year'].min()
-    old_artists = set(first_seen[first_seen <= yr_max - 5].index)
-    old_flag    = dfm['artistName'].isin(old_artists)   # vectorisé
+    first_seen    = dfm.groupby('artistName')['year'].min()
+    old_artists   = set(first_seen[first_seen <= yr_max - 5].index)
+    old_flag      = dfm['artistName'].isin(old_artists)
     old_music_pct = dfm.loc[old_flag, 'ms'].sum() / my_ms * 100
 
-    # ── Divers ────────────────────────────────────────────────────────────
     my_art            = dfm['artistName'].nunique()
     tracks_per_artist = dfm['trackName'].nunique() / max(my_art, 1)
     art_per_100h      = my_art / my_h * 100 if my_h > 0 else 0
 
-    # ── Sessions binge — sans .copy() inutile ─────────────────────────────
     df_sorted  = dfm.sort_values('ts')
     gaps_sec   = df_sorted['ts'].diff().dt.total_seconds().fillna(9999)
     sid        = (gaps_sec > 1800).cumsum()
     session_ms = df_sorted['ms'].groupby(sid).sum()
-    binge_sessions = int((session_ms >= 7_200_000).sum())   # 2h en ms
+    binge_sessions = int((session_ms >= 7_200_000).sum())
 
-    # ── Temporalité ───────────────────────────────────────────────────────
     night_ms  = dfm.loc[dfm['hour'] >= 22, 'ms'].sum()
     night_pct = night_ms / my_ms * 100
     peak_year = int(dfm.groupby('year')['ms'].sum().idxmax())
@@ -210,7 +200,6 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
         k = dfd.groupby('year')['ms'].sum()
         kids_peak_year = int(k.idxmax()) if not k.empty else yr_max
 
-    # ── Popularité / playlists (inchangés) ────────────────────────────────
     avg_artist_popularity  = 50
     mainstream_pct         = 0
     playlist_staleness     = 0.0
@@ -234,12 +223,10 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
         except Exception:
             pass
 
-    # ── Depth discography — top 20 artistes par heures ────────────────────
     top20 = artist_agg.nlargest(20, '_hours')
     avg_plays_per_track   = round(top20['_plays_per_track'].mean(), 1)
     top_unique_tracks_avg = round(top20['_unique_tracks'].mean(), 1)
 
-    # ── Score dimensions ──────────────────────────────────────────────────
     loyalty_score     = min(top50_hours / 25, 1.0)
     exploration_score = min(top_unique_tracks_avg / 30, 1.0)
     loop_penalty      = max(0, (avg_plays_per_track - 10) / 40)
@@ -262,38 +249,38 @@ def compute_score(dfm, dfd=None, lib=None, playlists=None):
     }
 
     stats = {
-        'unique_artists':        my_art,
-        'n_years':               n_years,
-        'oldest_year':           yr_min,
-        'peak_year':             peak_year,
-        'peak_hour':             peak_hour,
-        'art_per_year':          my_art / n_years,
-        'art_per_100h':          round(art_per_100h, 1),
-        'top50_hours':           round(top50_hours, 1),
-        'top_artist':            top_artist,
-        'top_artist_pct':        top_artist_pct,
-        'top_artist_h':          top_artist_h,
-        'skip_rate':             round(skip_rate, 1),
-        'shuffle_pct':           round(shuffle_pct, 1),
-        'repeat_rate':           round(repeat_rate * 100, 1),
-        'binge_sessions':        binge_sessions,
-        'night_pct':             round(night_pct, 1),
-        'old_music_pct':         round(old_music_pct, 1),
-        'tracks_per_artist':     round(tracks_per_artist, 1),
-        'loyalty_years':         round(loyalty_weighted, 1),
-        'avg_new':               int(new_per_year),
-        'total_plays':           len(dfm),
-        'kids_pct':              round(kids_pct, 1),
-        'kids_h':                round(kids_h, 1),
-        'kids_peak_year':        kids_peak_year,
-        'avg_artist_popularity': avg_artist_popularity,
-        'mainstream_pct':        mainstream_pct,
-        'playlist_staleness':    playlist_staleness,
-        'playlist_concentration':playlist_concentration,
-        'stale_playlist_pct':    stale_playlist_pct,
-        'proj_new':              int(my_art / n_years),
-        'avg_plays_per_track':   avg_plays_per_track,
-        'top_unique_tracks_avg': top_unique_tracks_avg,
+        'unique_artists':         my_art,
+        'n_years':                n_years,
+        'oldest_year':            yr_min,
+        'peak_year':              peak_year,
+        'peak_hour':              peak_hour,
+        'art_per_year':           my_art / n_years,
+        'art_per_100h':           round(art_per_100h, 1),
+        'top50_hours':            round(top50_hours, 1),
+        'top_artist':             top_artist,
+        'top_artist_pct':         top_artist_pct,
+        'top_artist_h':           top_artist_h,
+        'skip_rate':              round(skip_rate, 1),
+        'shuffle_pct':            round(shuffle_pct, 1),
+        'repeat_rate':            round(repeat_rate * 100, 1),
+        'binge_sessions':         binge_sessions,
+        'night_pct':              round(night_pct, 1),
+        'old_music_pct':          round(old_music_pct, 1),
+        'tracks_per_artist':      round(tracks_per_artist, 1),
+        'loyalty_years':          round(loyalty_weighted, 1),
+        'avg_new':                int(new_per_year),
+        'total_plays':            len(dfm),
+        'kids_pct':               round(kids_pct, 1),
+        'kids_h':                 round(kids_h, 1),
+        'kids_peak_year':         kids_peak_year,
+        'avg_artist_popularity':  avg_artist_popularity,
+        'mainstream_pct':         mainstream_pct,
+        'playlist_staleness':     playlist_staleness,
+        'playlist_concentration': playlist_concentration,
+        'stale_playlist_pct':     stale_playlist_pct,
+        'proj_new':               int(my_art / n_years),
+        'avg_plays_per_track':    avg_plays_per_track,
+        'top_unique_tracks_avg':  top_unique_tracks_avg,
     }
 
     archetype = get_archetype(dims, stats)
@@ -355,13 +342,20 @@ def _fmt(template, stats):
 
 
 def render(dfm, dfd=None, lib=None, playlists=None):
-    s = compute_score(dfm, dfd, lib, playlists)
+    # ── Read from prefetch cache — no recompute ───────────────────────────
+    s = st.session_state.get('score')
+    if not s:
+        s = compute_score(dfm, dfd, lib, playlists)
+        if s:
+            st.session_state['score'] = s
     if not s:
         return
 
     lbl, color = score_label(s['total'])
     arch = s['archetype']
 
+    # ── Score card — archetype shown compact (name + emoji + data_line only)
+    # Full curse/gift/prediction lives in Who You Are
     st.markdown(
         "<div style='background:linear-gradient(135deg,#060610,#0d0020);"
         "border:2px solid " + color + "33;border-radius:20px;padding:28px 32px;margin-bottom:6px;'>"
@@ -386,6 +380,9 @@ def render(dfm, dfd=None, lib=None, playlists=None):
         + arch['name'] + "</div>"
         "<div style='color:#888;font-size:.8em;line-height:1.6;font-style:italic;'>"
         + _fmt(arch['data_line'], s) + "</div>"
+        "<div style='margin-top:10px;'>"
+        "<span style='color:#555;font-size:.72em;'>Full portrait → Who You Are</span>"
+        "</div>"
         "</div></div>"
         "<div>" + _dim_bars(s) + "</div>"
         "</div>",
