@@ -189,6 +189,20 @@ def _load_into_session(parsed):
     st.session_state.data_loaded = True
     return True
 
+def _run_prefetch(dfm, dfd, lib, playlists):
+    """
+    Run once after file parse. Stores score + behavioral traits in session_state.
+    All tabs read from cache — zero recompute on navigation.
+    """
+    import score as score_mod
+    import who_you_are as wya_mod
+
+    if 'score' not in st.session_state:
+        st.session_state['score'] = score_mod.compute_score(dfm, dfd, lib, playlists)
+
+    # prefetch_traits is a no-op if 'who_traits' already cached
+    wya_mod.prefetch_traits(dfm, dfd)
+
 if (not st.session_state.data_loaded
         and is_authenticated()
         and st.session_state.get('_zip1_bytes') is not None):
@@ -211,7 +225,7 @@ SECTION_DEEP_DIVES = ["Artists and Tracks", "Likes Autopsy", "Playlist Autopsy",
 SECTION_WITNESS    = ["The Witness"]
 SECTION_FORGOTTEN  = ["Forgotten", "Explore"]
 SECTION_DARK_SIDE  = ["Hall of Shame", "Parent Mode"]
-PAGES_FULL_DNA     = []  # Genre Profile now lives in Horoscope tab
+PAGES_FULL_DNA     = []
 
 PAGES_BASE = (
     SECTION_YOUR_STORY +
@@ -316,12 +330,13 @@ with st.sidebar:
 
         st.markdown("---")
         if st.button("Load new file", use_container_width=True):
-            for k in ['data_loaded','dfm','dfd','lib','playlists','mode',
-                      '_zip1_bytes','_zip2_bytes','dfp',
-                      'quiz_done','gap_shown','quiz_artist_save',
-                      'quiz_style_save','quiz_time_save',
-                      'genre_inline_data','who_you_are_traits','who_narrative']:
-                st.session_state[k] = False if k in ['data_loaded','quiz_done','gap_shown'] else (
+            for k in ['data_loaded', 'dfm', 'dfd', 'lib', 'playlists', 'mode',
+                      '_zip1_bytes', '_zip2_bytes', 'dfp',
+                      'quiz_done', 'gap_shown', 'quiz_artist_save',
+                      'quiz_style_save', 'quiz_time_save',
+                      'genre_inline_data', 'who_traits', 'who_narrative',
+                      'who_moments', 'score']:
+                st.session_state[k] = False if k in ['data_loaded', 'quiz_done', 'gap_shown'] else (
                     {} if k == 'lib' else ([] if k == 'playlists' else None))
             st.rerun()
 
@@ -386,6 +401,10 @@ dfp       = st.session_state.get('dfp', pd.DataFrame())
 kids_on   = st.session_state.get('kids_on', False)
 df        = pd.concat([dfm, dfd]) if (kids_on and dfd is not None and not dfd.empty) else dfm
 
+# ── PREFETCH — runs once per session after data is ready ──────────────────────
+_run_prefetch(dfm, dfd, lib, playlists)
+
+# ── PAGE DISPATCH ─────────────────────────────────────────────────────────────
 if   "Overview"           in page: import overview;         overview.render(dfm, dfd, kids_on, lib, playlists)
 elif "Who You Are"        in page: import who_you_are;      who_you_are.render(dfm, dfd, lib, playlists)
 elif "Musical Horoscope"  in page: import horoscope;        horoscope.render(dfm, dfd, lib, playlists)
