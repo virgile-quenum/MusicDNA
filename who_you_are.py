@@ -348,7 +348,7 @@ Return only the 5 sentences, no preamble, no formatting."""
                     "anthropic-version": "2023-06-01",
                 },
                 json={
-                    "model":      "claude-sonnet-4-20250514",
+                    "model":      "claude-haiku-4-5-20251001",
                     "max_tokens": 400,
                     "messages":   [{"role": "user", "content": prompt}],
                 },
@@ -358,8 +358,10 @@ Return only the 5 sentences, no preamble, no formatting."""
                 text = response.json()["content"][0]["text"].strip()
                 st.session_state['who_narrative'] = text
                 return text
-        except Exception:
-            pass
+            else:
+                st.session_state['_narrative_error'] = f"API {response.status_code}: {response.text[:200]}"
+        except Exception as e:
+            st.session_state['_narrative_error'] = str(e)
 
     # ── Fallback rule-based (no key or API error) ─────────────────────────
     lines = [
@@ -443,6 +445,10 @@ def render(dfm, dfd=None, lib=None, playlists=None):
 
     with st.spinner("Generating your behavioral portrait..."):
         narrative = _generate_narrative(traits, s)
+
+    # Debug — affiche l'erreur API si présente, à retirer après validation
+    if '_narrative_error' in st.session_state:
+        st.error("API error: " + st.session_state['_narrative_error'])
 
     sentences = [x.strip() for x in narrative.replace("...", "…").split(". ") if x.strip()]
     narr_html = ""
