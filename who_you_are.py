@@ -338,6 +338,7 @@ Write a behavioral portrait in exactly 5 sentences. Rules:
 Return only the 5 sentences, no preamble, no formatting."""
 
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    st.session_state['_debug_key'] = "key_found" if api_key else "NO_KEY"
     if api_key:
         try:
             response = requests.post(
@@ -354,6 +355,8 @@ Return only the 5 sentences, no preamble, no formatting."""
                 },
                 timeout=30,
             )
+            st.session_state['_debug_status'] = response.status_code
+            st.session_state['_debug_body'] = response.text[:300]
             if response.status_code == 200:
                 text = response.json()["content"][0]["text"].strip()
                 st.session_state['who_narrative'] = text
@@ -362,6 +365,7 @@ Return only the 5 sentences, no preamble, no formatting."""
                 st.session_state['_narrative_error'] = f"API {response.status_code}: {response.text[:200]}"
         except Exception as e:
             st.session_state['_narrative_error'] = str(e)
+            st.session_state['_debug_exception'] = str(e)
 
     # ── Fallback rule-based (no key or API error) ─────────────────────────
     lines = [
@@ -446,9 +450,13 @@ def render(dfm, dfd=None, lib=None, playlists=None):
     with st.spinner("Generating your behavioral portrait..."):
         narrative = _generate_narrative(traits, s)
 
-    # Debug — affiche l'erreur API si présente, à retirer après validation
-    if '_narrative_error' in st.session_state:
-        st.error("API error: " + st.session_state['_narrative_error'])
+    # Debug block — retirer après validation
+    with st.expander("🔧 Debug API", expanded=True):
+        st.write("Key:", st.session_state.get('_debug_key', 'not checked'))
+        st.write("Status:", st.session_state.get('_debug_status', 'no call made'))
+        st.write("Body:", st.session_state.get('_debug_body', '—'))
+        st.write("Exception:", st.session_state.get('_debug_exception', 'none'))
+        st.write("Error:", st.session_state.get('_narrative_error', 'none'))
 
     sentences = [x.strip() for x in narrative.replace("...", "…").split(". ") if x.strip()]
     narr_html = ""
