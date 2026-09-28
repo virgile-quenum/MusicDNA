@@ -225,6 +225,7 @@ SECTION_DEEP_DIVES = ["Artists and Tracks", "Likes Autopsy", "Playlist Autopsy",
 SECTION_WITNESS    = ["The Witness"]
 SECTION_FORGOTTEN  = ["Forgotten", "Explore"]
 SECTION_DARK_SIDE  = ["Hall of Shame", "Parent Mode"]
+SECTION_RADAR      = ["Concert Radar"]
 PAGES_FULL_DNA     = []
 
 PAGES_BASE = (
@@ -232,7 +233,8 @@ PAGES_BASE = (
     SECTION_DEEP_DIVES +
     SECTION_WITNESS    +
     SECTION_FORGOTTEN  +
-    SECTION_DARK_SIDE
+    SECTION_DARK_SIDE  +
+    SECTION_RADAR
 )
 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
@@ -352,6 +354,7 @@ with st.sidebar:
         for p in SECTION_WITNESS:    section_map[p] = ("The witness",      "#888")
         for p in SECTION_FORGOTTEN:  section_map[p] = ("What you forgot",  "#888")
         for p in SECTION_DARK_SIDE:  section_map[p] = ("The dark side",    "#888")
+        for p in SECTION_RADAR:      section_map[p] = ("Live",             "#888")
 
         current_section = ""
         for p in nav_pages:
@@ -419,3 +422,4 @@ elif "Parent Mode"        in page: import parent_mode;      parent_mode.render(d
 elif "Celebrity Twin"     in page: import celebrity_twin;   celebrity_twin.render(dfm)
 elif "Artists and Tracks" in page: import artists;          artists.render(df)
 elif "Podcast Autopsy"    in page: import podcast_autopsy;  podcast_autopsy.render(dfp)
+elif "Concert Radar"      in page: import concert_radar.page as concert_radar_page; concert_radar_page.render(dfm)

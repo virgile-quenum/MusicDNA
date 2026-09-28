@@ -1,0 +1,18 @@
+# concert_radar/overrides.yaml
+#
+# Manual overrides for artist touring status, applied AFTER the MusicBrainz
+# life-span check and BEFORE eligibility for "My artists". Use this for
+# cases MusicBrainz gets wrong or doesn't cover: solo members marked ended
+# by mistake, artists who are alive but have stopped touring, fictional/TV
+# "artists" that will never play a real venue, etc.
+#
+# status: one of active | ended | not_touring
+# reason: free text, shown in the UI tooltip
+
+"R. Kelly":
+  status: not_touring
+  reason: "Not touring"
+
+"Empire Cast":
+  status: ended
+  reason: "TV show cast, not a real touring act"

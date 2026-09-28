@@ -1,0 +1,11 @@
+# concert_radar/aliases.yaml
+#
+# Maps a name as it commonly appears in event line-ups (left) to the
+# canonical artist name as it appears in your Spotify history (right).
+# Both sides are normalised (lowercase, accents stripped, punctuation
+# dropped) before matching, so "Maitre Gim's" and "maitre gims" are the
+# same key. Edit freely — this file is read fresh on every run.
+
+"maitre gims": "gims"
+"fianso": "sofiane"
+"matthieu chedid": "-m-"

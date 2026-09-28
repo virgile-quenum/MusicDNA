@@ -1,0 +1,89 @@
+communes:
+  # Paris (by arrondissement name variants Bandsintown/Songkick commonly use)
+  - Paris
+  - Paris 1er
+  - Paris 2e
+  - Paris 3e
+  - Paris 4e
+  - Paris 5e
+  - Paris 6e
+  - Paris 7e
+  - Paris 8e
+  - Paris 9e
+  - Paris 10e
+  - Paris 11e
+  - Paris 12e
+  - Paris 13e
+  - Paris 14e
+  - Paris 15e
+  - Paris 16e
+  - Paris 17e
+  - Paris 18e
+  - Paris 19e
+  - Paris 20e
+  # 92 — Hauts-de-Seine
+  - Boulogne-Billancourt
+  - Nanterre
+  - Courbevoie
+  - Neuilly-sur-Seine
+  - Levallois-Perret
+  - Puteaux
+  - Saint-Cloud
+  - Colombes
+  - Asnières-sur-Seine
+  - Clichy
+  - Issy-les-Moulineaux
+  - Rueil-Malmaison
+  - Antony
+  # 93 — Seine-Saint-Denis
+  - Saint-Denis
+  - Aubervilliers
+  - Montreuil
+  - Bobigny
+  - Pantin
+  - Aulnay-sous-Bois
+  - Bondy
+  - Le Blanc-Mesnil
+  - Sevran
+  - Noisy-le-Sec
+  - Argenteuil
+  - Épinay-sur-Seine
+  # 94 — Val-de-Marne
+  - Vincennes
+  - Créteil
+  - Ivry-sur-Seine
+  - Vitry-sur-Seine
+  - Champigny-sur-Marne
+  - Fontenay-sous-Bois
+  - Nogent-sur-Marne
+  - Saint-Maur-des-Fossés
+  - Charenton-le-Pont
+  # 77 — Seine-et-Marne
+  - Meaux
+  - Melun
+  - Chelles
+  - Torcy
+  - Fontainebleau
+  - Provins
+  # 78 — Yvelines
+  - Versailles
+  - Saint-Germain-en-Laye
+  - Sartrouville
+  - Mantes-la-Jolie
+  - Rambouillet
+  - Poissy
+  # 91 — Essonne
+  - Évry
+  - Massy
+  - Corbeil-Essonnes
+  - Palaiseau
+  - Les Ulis
+  # 95 — Val-d'Oise
+  - Argenteuil
+  - Cergy
+  - Sarcelles
+  - Garges-lès-Gonesse
+  - Ermont
+  - Pontoise
+  # Frequently used venue-adjacent towns worth keeping explicit
+  - Conflans-Sainte-Honorine
